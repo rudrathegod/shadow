@@ -8,7 +8,8 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --mac"
+    "dist": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
   },
   "build": {
     "appId": "com.shadow.overlay",
@@ -38,6 +39,15 @@
         "NSCameraUsageDescription": "shadow does not use the camera.",
         "NSAudioCaptureUsageDescription": "shadow captures system audio to transcribe the other participant in a call."
       }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "shadow-win.${ext}"
     }
   },
   "keywords": [

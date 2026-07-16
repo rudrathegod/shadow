@@ -310,13 +310,14 @@
 
   // ---- onboarding / first-run tutorial -----------------------------------
   const obScrim = $('#onboard-scrim');
+  const isMac = shadow.platform === 'darwin';
   const OB_STEPS = [
     {
       icon: '👋',
       title: 'Welcome to shadow',
       body: 'shadow is a private AI copilot that floats over your screen. It can <strong>see your screen</strong>, <strong>hear your meetings</strong>, and help you answer questions or solve coding problems — while staying hidden from most screen shares.<br><br>This quick guide gets you running in about a minute.'
     },
-    {
+    ...(isMac ? [{
       icon: '🔐',
       title: 'Allow shadow to see & hear',
       body: 'shadow needs two macOS permissions. Click each button, turn <strong>shadow</strong> ON in the window that opens, then come back here.<ul><li><strong>Microphone</strong> — to hear you</li><li><strong>Screen Recording</strong> — to see your screen and hear meeting audio</li></ul>',
@@ -324,7 +325,11 @@
         { label: 'Open Microphone settings', action: () => shadow.openPane('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone') },
         { label: 'Open Screen Recording settings', action: () => shadow.openPane('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture') }
       ]
-    },
+    }] : [{
+      icon: '🔐',
+      title: 'Allow shadow to see & hear',
+      body: 'When you first use a feature, Windows will prompt for <strong>Microphone</strong> and <strong>screen share</strong> access — click <strong>Allow</strong>. No manual settings needed.'
+    }]),
     {
       icon: '🔑',
       title: 'Connect an AI provider',
