@@ -6,7 +6,7 @@
 
 A free, self-hosted alternative to Cluely. Bring your own AI key (OpenAI · Anthropic · Google Gemini).
 
-<img src="docs/tutorial.png" width="620" alt="shadow first-run tutorial" />
+
 
 </div>
 
