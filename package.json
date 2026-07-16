@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --mac zip --universal"
+    "dist": "electron-builder --mac"
   },
   "build": {
     "appId": "com.shadow.overlay",
@@ -22,7 +22,10 @@
     ],
     "mac": {
       "target": [
-        "dir"
+        {
+          "target": "zip",
+          "arch": "universal"
+        }
       ],
       "artifactName": "shadow-mac.${ext}",
       "category": "public.app-category.productivity",
