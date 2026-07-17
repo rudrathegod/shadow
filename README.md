@@ -131,6 +131,16 @@ shadow is hidden from most screen-share tools automatically — **Google Meet, M
 
 The panel is see-through and click-through — the empty space around it never blocks the app behind it.
 
+### On Windows
+
+Same shortcuts, with `Ctrl` instead of `⌘`:
+
+- **`Ctrl` `↵` — Assist.**
+- **`Ctrl` `H` — Solve the coding problem on screen.**
+- **Quit** with `Ctrl` `Shift` `X`.
+
+Permissions are simpler too: Windows prompts for **Microphone** and screen-share access the first time you use a feature — click **Allow** and you're done. No manual settings to hunt down.
+
 ---
 
 ## How it works (under the hood)

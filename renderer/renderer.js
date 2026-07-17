@@ -151,6 +151,13 @@
     shadow.captureToggle();
   });
 
+  // ---- capture: shared Float32 -> Int16 PCM conversion --------------------
+  function toInt16(f) {
+    const out = new Int16Array(f.length);
+    for (let i = 0; i < f.length; i++) { const s = Math.max(-1, Math.min(1, f[i])); out[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
+    return out;
+  }
+
   // ---- capture: mic (renderer side) --------------------------------------
   let audioCtx = null, micStream = null, micNode = null, micProc = null;
   async function startMic() {
@@ -163,10 +170,7 @@
       const sink = audioCtx.createGain(); sink.gain.value = 0; // run processor silently
       micNode.connect(micProc); micProc.connect(sink); sink.connect(audioCtx.destination);
       micProc.onaudioprocess = (e) => {
-        const f = e.inputBuffer.getChannelData(0);
-        const out = new Int16Array(f.length);
-        for (let i = 0; i < f.length; i++) { const s = Math.max(-1, Math.min(1, f[i])); out[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
-        shadow.micPcm(out.buffer);
+        shadow.micPcm(toInt16(e.inputBuffer.getChannelData(0)).buffer);
       };
     } catch (err) {
       shadow.log('mic error: ' + (err && err.message));
@@ -195,10 +199,7 @@
       const sink = sysCtx.createGain(); sink.gain.value = 0;
       sysNode.connect(sysProc); sysProc.connect(sink); sink.connect(sysCtx.destination);
       sysProc.onaudioprocess = (e) => {
-        const f = e.inputBuffer.getChannelData(0);
-        const out = new Int16Array(f.length);
-        for (let i = 0; i < f.length; i++) { const s = Math.max(-1, Math.min(1, f[i])); out[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
-        shadow.systemPcm(out.buffer);
+        shadow.systemPcm(toInt16(e.inputBuffer.getChannelData(0)).buffer);
       };
       shadow.log('system audio: capturing loopback');
     } catch (err) {

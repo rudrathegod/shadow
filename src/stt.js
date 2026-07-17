@@ -3,12 +3,12 @@
 // fall back across providers. Returns { text, provider } or { text:'', error }.
 const { pcmToWav } = require('./wav');
 
-async function transcribeOpenAI(apiKey, wav, model) {
+async function transcribeOpenAI(apiKey, wav) {
   const OpenAI = require('openai');
   const toFile = OpenAI.toFile || require('openai/uploads').toFile;
   const client = new OpenAI({ apiKey });
   const file = await toFile(wav, 'audio.wav', { type: 'audio/wav' });
-  const res = await client.audio.transcriptions.create({ file, model: model || 'whisper-1' });
+  const res = await client.audio.transcriptions.create({ file, model: 'whisper-1' });
   return (res.text || '').trim();
 }
 
@@ -28,7 +28,7 @@ async function transcribeGemini(apiKey, wav) {
 function createSTT(settings) {
   const keys = settings.apiKeys || {};
   const chain = [];
-  if (keys.openai) chain.push({ p: 'openai', fn: (wav) => transcribeOpenAI(keys.openai, wav, settings.sttModel) });
+  if (keys.openai) chain.push({ p: 'openai', fn: (wav) => transcribeOpenAI(keys.openai, wav) });
   if (keys.gemini) chain.push({ p: 'gemini', fn: (wav) => transcribeGemini(keys.gemini, wav) });
 
   return {
