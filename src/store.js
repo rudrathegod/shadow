@@ -11,8 +11,8 @@ const DEFAULTS = {
   apiKeys: { openai: '', anthropic: '', gemini: '' },
   models: {
     openai: { fast: 'gpt-4o-mini', smart: 'gpt-4o' },
-    anthropic: { fast: 'claude-3-5-haiku-latest', smart: 'claude-3-5-sonnet-latest' },
-    gemini: { fast: 'gemini-1.5-flash', smart: 'gemini-1.5-pro' }
+    anthropic: { fast: 'claude-sonnet-5', smart: 'claude-sonnet-5' },
+    gemini: { fast: 'gemini-3.5-pro', smart: 'gemini-3.5-pro' }
   }
 };
 
