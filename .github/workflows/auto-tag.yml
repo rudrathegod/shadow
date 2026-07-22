@@ -15,7 +15,7 @@ jobs:
       - name: Tag release if version is new
         run: |
           VERSION="v$(node -p "require('./package.json').version")"
-          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q "$VERSION"; then
             echo "Tag $VERSION already exists, skipping."
           else
             git config user.name "github-actions[bot]"
