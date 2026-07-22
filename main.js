@@ -202,11 +202,15 @@ async function runFeature(mode, userText) {
 
     let imageDataUrl = null; 
     if (def.needsScreen) { 
-      const access = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted'; 
-      if (access !== 'granted') { 
-        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); 
-        send('status', { message: 'Screen capture needs permission — opening System Settings. Grant Screen Recording to shadow, then fully quit and reopen the app.' }); 
-      } else { 
+      const access = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted';
+      if (access === 'denied') {
+        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+        send('status', { message: 'Screen capture needs permission — opening System Settings. Grant Screen Recording to shadow, then fully quit and reopen the app.' });
+      } else {
+        // 'granted' or 'not-determined' — attempt the capture either way. When
+        // not-determined (e.g. right after removing shadow from the Screen
+        // Recording list), this is what actually triggers macOS's native
+        // permission prompt; checking status alone never does.
         try { 
           imageDataUrl = await captureScreenshot(); 
         } catch (e) { 
