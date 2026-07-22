@@ -252,6 +252,43 @@ button:focus { outline: none; }
 .s-field input:focus { border-color: var(--accent); }
 .s-status { color: var(--tx-mut); font-size: 12px; margin-top: 10px; min-height: 16px; }
 
+.s-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.s-tab { flex: none; border: none; background: none; color: var(--tx-mut); font-size: 13px; font-weight: 600; padding: 8px 10px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 140ms ease; }
+.s-tab.on { color: var(--tx-1); border-bottom-color: var(--accent); }
+.s-panel.hidden { display: none; }
+
+.s-pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 44px);
+  grid-template-areas:
+    "tl tc tr"
+    ".  ce  ."
+    "bl bc br";
+  gap: 8px;
+  margin-top: 4px;
+}
+.s-pos-grid button {
+  border-radius: var(--r-8);
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.s-pos-grid button:hover { background: rgba(255,255,255,0.08); }
+.s-pos-grid button.on { border-color: var(--accent); background: rgba(139,92,246,0.22); }
+.s-pos-grid button[data-pos="top-left"] { grid-area: tl; }
+.s-pos-grid button[data-pos="top-center"] { grid-area: tc; }
+.s-pos-grid button[data-pos="top-right"] { grid-area: tr; }
+.s-pos-grid button[data-pos="center"] { grid-area: ce; }
+.s-pos-grid button[data-pos="bottom-left"] { grid-area: bl; }
+.s-pos-grid button[data-pos="bottom-center"] { grid-area: bc; }
+.s-pos-grid button[data-pos="bottom-right"] { grid-area: br; }
+
+.s-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: flex-end; }
+.s-quit { border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.12); color: #f87171; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: var(--r-pill); cursor: pointer; transition: all 140ms ease; }
+.s-quit:hover { background: rgba(239,68,68,0.22); }
+
 /* ============================ Onboarding / tutorial ============================ */
 #onboard-scrim { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0,0,0,0.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 #onboard-scrim.hidden { display: none; }

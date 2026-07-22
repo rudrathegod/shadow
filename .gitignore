@@ -5,3 +5,4 @@ native/systemaudio
 *.log
 .DS_Store
 shadow-data.json
+.claude/

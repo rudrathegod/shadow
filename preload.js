@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('shadow', {
   platform: process.platform,
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (patch) => ipcRenderer.invoke('settings:set', patch),
+  windowSetPosition: (preset) => ipcRenderer.invoke('window:setPosition', preset),
+  quitApp: () => ipcRenderer.send('app:quit'),
   ask: (payload) => ipcRenderer.send('ask', payload),
   captureToggle: () => ipcRenderer.invoke('capture:toggle'),
   captureState: () => ipcRenderer.invoke('capture:state'),

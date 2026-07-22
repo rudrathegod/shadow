@@ -21,15 +21,44 @@ let flushTimer = null;
 
 function send(channel, data) { if (win && !win.isDestroyed()) win.webContents.send(channel, data); }
 
+// -------- window position --------
+const MARGIN = 6;
+function computePosition(preset, w, h) {
+  const { workArea } = screen.getPrimaryDisplay();
+  const xLeft = workArea.x + MARGIN;
+  const xCenter = Math.round(workArea.x + (workArea.width - w) / 2);
+  const xRight = workArea.x + workArea.width - w - MARGIN;
+  const yTop = workArea.y + MARGIN;
+  const yCenter = Math.round(workArea.y + (workArea.height - h) / 2);
+  const yBottom = workArea.y + workArea.height - h - MARGIN;
+  switch (preset) {
+    case 'top-left': return { x: xLeft, y: yTop };
+    case 'top-right': return { x: xRight, y: yTop };
+    case 'bottom-left': return { x: xLeft, y: yBottom };
+    case 'bottom-center': return { x: xCenter, y: yBottom };
+    case 'bottom-right': return { x: xRight, y: yBottom };
+    case 'center': return { x: xCenter, y: yCenter };
+    case 'top-center':
+    default: return { x: xCenter, y: yTop };
+  }
+}
+function setWindowPosition(preset) {
+  if (!win) return;
+  const [w, h] = win.getSize();
+  const { x, y } = computePosition(preset, w, h);
+  win.setPosition(x, y);
+}
+
 // -------- window --------
 function createWindow() {
-  const { workArea } = screen.getPrimaryDisplay();
+  const settings = store.getSettings();
   const W = 700, H = 600;
+  const { x, y } = computePosition(settings.windowPosition, W, H);
   win = new BrowserWindow({
     width: W,
     height: H,
-    x: Math.round(workArea.x + (workArea.width - W) / 2),
-    y: workArea.y + 6,
+    x,
+    y,
     frame: false,
     transparent: true,
     hasShadow: false,
@@ -167,6 +196,12 @@ async function runFeature(mode, userText) {
 // -------- IPC --------
 ipcMain.handle('settings:get', () => store.getSettings());
 ipcMain.handle('settings:set', (_e, patch) => { sttDisabled = false; return store.setSettings(patch); });
+ipcMain.handle('window:setPosition', (_e, preset) => {
+  const saved = store.setSettings({ windowPosition: preset });
+  setWindowPosition(preset);
+  return saved;
+});
+ipcMain.on('app:quit', () => app.quit());
 ipcMain.handle('capture:toggle', () => setCapturing(!state.capturing));
 ipcMain.handle('capture:state', () => ({ active: state.capturing }));
 ipcMain.on('ask', (_e, payload) => runFeature(payload.mode, payload.text));

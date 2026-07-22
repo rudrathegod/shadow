@@ -57,7 +57,13 @@
         <div class="s-title">Settings</div>
         <button id="s-close" class="s-close">Done</button>
       </div>
-      <div class="s-body">
+
+      <div class="s-tabs" id="s-tabs">
+        <button class="s-tab on" data-tab="general">General</button>
+        <button class="s-tab" data-tab="position">Position</button>
+      </div>
+
+      <div class="s-body s-panel" id="s-panel-general">
         <label class="s-label">Provider</label>
         <div class="s-seg" id="provider-seg">
           <button data-provider="openai">OpenAI</button>
@@ -75,6 +81,23 @@
         <div class="s-field"><span>Smart</span><input id="model-smart" type="text" autocomplete="off" /></div>
 
         <div class="s-status" id="s-status"></div>
+      </div>
+
+      <div class="s-body s-panel hidden" id="s-panel-position">
+        <label class="s-label">Screen position <span class="s-hint">where shadow docks on your screen</span></label>
+        <div class="s-pos-grid" id="pos-grid">
+          <button data-pos="top-left" title="Top left"></button>
+          <button data-pos="top-center" title="Top center"></button>
+          <button data-pos="top-right" title="Top right"></button>
+          <button data-pos="center" title="Center"></button>
+          <button data-pos="bottom-left" title="Bottom left"></button>
+          <button data-pos="bottom-center" title="Bottom center"></button>
+          <button data-pos="bottom-right" title="Bottom right"></button>
+        </div>
+      </div>
+
+      <div class="s-foot">
+        <button id="quit-btn" class="s-quit">Quit shadow</button>
       </div>
     </div>
   </div>

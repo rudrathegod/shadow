@@ -263,7 +263,26 @@
     const m = settings.models[settings.provider] || { fast: '', smart: '' };
     $('#model-fast').value = m.fast; $('#model-smart').value = m.smart;
     $('#s-status').textContent = statusText();
+    document.querySelectorAll('#pos-grid button').forEach((b) => b.classList.toggle('on', b.dataset.pos === (settings.windowPosition || 'top-center')));
   }
+
+  // ---- settings: tabs -----------------------------------------------------
+  document.querySelectorAll('.s-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.s-tab').forEach((t) => t.classList.toggle('on', t === tab));
+      document.querySelectorAll('.s-panel').forEach((p) => p.classList.toggle('hidden', p.id !== 's-panel-' + tab.dataset.tab));
+    });
+  });
+
+  // ---- settings: screen position -------------------------------------------
+  document.querySelectorAll('#pos-grid button').forEach((b) => b.addEventListener('click', async () => {
+    document.querySelectorAll('#pos-grid button').forEach((x) => x.classList.toggle('on', x === b));
+    settings.windowPosition = b.dataset.pos;
+    await shadow.windowSetPosition(b.dataset.pos);
+  }));
+
+  // ---- quit ------------------------------------------------------------
+  $('#quit-btn').addEventListener('click', () => shadow.quitApp());
   function statusText() {
     const k = settings.apiKeys;
     const has = [k.openai && 'OpenAI', k.anthropic && 'Anthropic', k.gemini && 'Gemini'].filter(Boolean);

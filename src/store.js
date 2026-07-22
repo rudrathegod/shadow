@@ -8,6 +8,7 @@ const FILE = path.join(app.getPath('userData'), 'shadow-data.json');
 const DEFAULTS = {
   provider: 'openai',
   smart: false,
+  windowPosition: 'top-center',
   apiKeys: { openai: '', anthropic: '', gemini: '' },
   models: {
     openai: { fast: 'gpt-4o-mini', smart: 'gpt-4o' },
