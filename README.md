@@ -205,4 +205,4 @@ Issues and PRs welcome. shadow is intentionally small and readable — `main.js`
 
 Built as an open-source study of how tools like **Cluely** and **Interview Coder** work. Modeled on the open-source clones `pickle-com/glass` and `sohzm/cheating-daddy`.
 
-**License: [GPL-3.0-or-later](LICENSE).**
+**License: All Rights Reserved — see [LICENSE](LICENSE). No redistribution, modification, or rebranding without permission.**
