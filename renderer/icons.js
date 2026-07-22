@@ -16,13 +16,11 @@
     play: '<path d="M6 4.5v15a1 1 0 0 0 1.5.87l12-7.5a1 1 0 0 0 0-1.74l-12-7.5A1 1 0 0 0 6 4.5z"/>',
     'stop-square': '<rect x="5" y="5" width="14" height="14" rx="3.5"/>'
   };
-  // shadow logo — a pinwheel/compass mark inside a ring, echoing Cluely's glyph.
+  // shadow logo — a ghost mark, matching the app icon.
   const LOGO = '<svg viewBox="0 0 24 24" width="SIZE" height="SIZE" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-    '<circle cx="12" cy="12" r="9.2" stroke="currentColor" stroke-width="1.6"/>' +
-    '<path d="M12 12 6.5 8.2a6.6 6.6 0 0 1 5.5-2.9V12z" fill="currentColor"/>' +
-    '<path d="M12 12 15.8 6.5a6.6 6.6 0 0 1 2.9 5.5H12z" fill="currentColor" opacity="0.72"/>' +
-    '<path d="M12 12 17.5 15.8a6.6 6.6 0 0 1-5.5 2.9V12z" fill="currentColor" opacity="0.5"/>' +
-    '<path d="M12 12 8.2 17.5a6.6 6.6 0 0 1-2.9-5.5H12z" fill="currentColor" opacity="0.85"/>' +
+    '<path d="M6 20V12a6 6 0 0 1 12 0v8l-3-2-1.5 2-1.5-2-1.5 2L8 18z" fill="currentColor"/>' +
+    '<circle cx="9.7" cy="12.6" r="1.1" fill="var(--bg,#111)"/>' +
+    '<circle cx="14.3" cy="12.6" r="1.1" fill="var(--bg,#111)"/>' +
     '</svg>';
 
   function icon(name, opts) {
