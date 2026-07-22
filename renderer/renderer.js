@@ -294,6 +294,23 @@
 
   // ---- quit ------------------------------------------------------------
   $('#quit-btn').addEventListener('click', () => shadow.quitApp());
+  let updateUrl = null;
+  $('#update-btn').addEventListener('click', async () => {
+    const btn = $('#update-btn');
+    if (updateUrl) { shadow.openPane(updateUrl); return; }
+    btn.textContent = 'Checking…';
+    try {
+      const { current, latest, url } = await shadow.checkUpdate();
+      if (latest && latest !== current) {
+        updateUrl = url;
+        btn.textContent = 'Update available: v' + latest + ' — click to download';
+      } else {
+        btn.textContent = 'Up to date (v' + current + ')';
+      }
+    } catch {
+      btn.textContent = 'Check failed — try again';
+    }
+  });
   function statusText() {
     const k = settings.apiKeys;
     const has = [k.openai && 'OpenAI', k.anthropic && 'Anthropic', k.gemini && 'Gemini'].filter(Boolean);

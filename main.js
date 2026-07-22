@@ -228,6 +228,13 @@ async function runFeature(mode, userText) {
 
 // -------- IPC -------- 
 ipcMain.handle('app:getVersion', () => app.getVersion());
+ipcMain.handle('app:checkUpdate', async () => {
+  // ponytail: no code-signing cert -> no silent Squirrel auto-update, just check + link.
+  const res = await fetch('https://api.github.com/repos/rudrathegod/shadow/releases/latest');
+  const rel = await res.json();
+  const latest = (rel.tag_name || '').replace(/^v/, '');
+  return { current: app.getVersion(), latest, url: rel.html_url };
+});
 ipcMain.handle('settings:get', () => store.getSettings());
 ipcMain.handle('settings:set', (_e, patch) => { 
   sttDisabled = false; 
