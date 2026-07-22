@@ -22,6 +22,7 @@
 
   // ---- state -------------------------------------------------------------
   let settings = null;
+  let version = '';
   let busy = false;
   let aiEl = null;       // current streaming <div class="ai-text">
   let caretEl = null;
@@ -272,6 +273,7 @@
     const m = settings.models[settings.provider] || { fast: '', smart: '' };
     $('#model-fast').value = m.fast; $('#model-smart').value = m.smart;
     $('#s-status').textContent = statusText();
+    $('#s-version').textContent = 'shadow v' + version;
     document.querySelectorAll('#pos-grid button').forEach((b) => b.classList.toggle('on', b.dataset.pos === (settings.windowPosition || 'top-center')));
   }
 
@@ -413,6 +415,7 @@
   // ---- boot --------------------------------------------------------------
   (async function boot() {
     settings = await shadow.settingsGet();
+    version = await shadow.getVersion();
     smartBtn.classList.toggle('on', !!settings.smart);
     showExample();
     syncPlaceholder();

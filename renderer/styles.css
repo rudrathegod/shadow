@@ -285,8 +285,7 @@ button:focus { outline: none; }
 .s-pos-grid button[data-pos="bottom-center"] { grid-area: bc; }
 .s-pos-grid button[data-pos="bottom-right"] { grid-area: br; }
 
-.s-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: flex-end; }
-.s-quit { border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.12); color: #f87171; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: var(--r-pill); cursor: pointer; transition: all 140ms ease; }
+.s-quit { margin-top: 16px; align-self: flex-start; border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.12); color: #f87171; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: var(--r-pill); cursor: pointer; transition: all 140ms ease; }
 .s-quit:hover { background: rgba(239,68,68,0.22); }
 
 /* ============================ Onboarding / tutorial ============================ */

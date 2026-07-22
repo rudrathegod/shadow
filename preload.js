@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('shadow', {
   platform: process.platform,
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (patch) => ipcRenderer.invoke('settings:set', patch),
   windowSetPosition: (preset) => ipcRenderer.invoke('window:setPosition', preset),

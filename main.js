@@ -227,7 +227,8 @@ async function runFeature(mode, userText) {
 } 
 
 // -------- IPC -------- 
-ipcMain.handle('settings:get', () => store.getSettings()); 
+ipcMain.handle('app:getVersion', () => app.getVersion());
+ipcMain.handle('settings:get', () => store.getSettings());
 ipcMain.handle('settings:set', (_e, patch) => { 
   sttDisabled = false; 
   return store.setSettings(patch); 
