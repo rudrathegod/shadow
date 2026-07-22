@@ -35,14 +35,16 @@
       ],
       "artifactName": "shadow-mac.${ext}",
       "category": "public.app-category.productivity",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "identity": null,
+      "helperBundleId": "com.shadow.overlay.helper",
       "extendInfo": {
         "LSUIElement": true,
         "NSMicrophoneUsageDescription": "shadow transcribes your microphone so it can help you in conversations.",
         "NSCameraUsageDescription": "shadow does not use the camera.",
-        "NSAudioCaptureUsageDescription": "shadow captures system audio to transcribe the other participant in a call."
+        "NSAudioCaptureUsageDescription": "shadow captures system audio to transcribe the other participant in a call.",
+        "NSScreenCaptureUsageDescription": "shadow captures screen instances to analyze context for meeting and coding features."
       }
     },
     "win": {
