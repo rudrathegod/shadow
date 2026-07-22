@@ -68,7 +68,7 @@ After that, shadow opens normally forever. No installer, no admin rights needed 
 You need [Node.js](https://nodejs.org) 18+ installed. No Xcode required.
 
 ```bash
-git clone https://github.com/Blueturboguy07/shadow.git
+git clone https://github.com/rudrathegod/shadow.git
 cd shadow
 npm install
 npm start

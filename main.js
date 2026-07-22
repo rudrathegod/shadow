@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut, screen, session, desktopCapturer, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, screen, session, desktopCapturer, shell, systemPreferences } = require('electron');
 const path = require('path');
 const store = require('./src/store');
 const { captureScreenshot } = require('./src/screen');
@@ -174,8 +174,14 @@ async function runFeature(mode, userText) {
 
     let imageDataUrl = null;
     if (def.needsScreen) {
-      try { imageDataUrl = await captureScreenshot(); }
-      catch (e) { send('status', { message: 'Screen capture needs permission — grant Screen Recording to shadow in System Settings.' }); }
+      const access = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted';
+      if (access !== 'granted') {
+        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+        send('status', { message: 'Screen capture needs permission — opening System Settings. Grant Screen Recording to shadow, then fully quit and reopen the app.' });
+      } else {
+        try { imageDataUrl = await captureScreenshot(); }
+        catch (e) { send('status', { message: 'Screen capture failed: ' + (e && e.message ? e.message : e) }); }
+      }
     }
 
     const built = def.build({ transcript, userText: userText || '' });

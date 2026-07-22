@@ -6,6 +6,7 @@
   "author": "shadow",
   "main": "main.js",
   "scripts": {
+    "postinstall": "sh scripts/sign-dev-electron.sh",
     "start": "electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --mac",
@@ -15,6 +16,7 @@
     "appId": "com.shadow.overlay",
     "productName": "shadow",
     "asar": false,
+    "afterSign": "scripts/after-sign.js",
     "files": [
       "main.js",
       "preload.js",
