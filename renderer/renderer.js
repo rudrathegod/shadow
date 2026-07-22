@@ -294,16 +294,21 @@
 
   // ---- quit ------------------------------------------------------------
   $('#quit-btn').addEventListener('click', () => shadow.quitApp());
-  let updateUrl = null;
+  let updateZip = null;
   $('#update-btn').addEventListener('click', async () => {
     const btn = $('#update-btn');
-    if (updateUrl) { shadow.openPane(updateUrl); return; }
+    if (updateZip) {
+      btn.textContent = 'Installing… shadow will restart';
+      btn.disabled = true;
+      await shadow.installUpdate(updateZip);
+      return;
+    }
     btn.textContent = 'Checking…';
     try {
-      const { current, latest, url } = await shadow.checkUpdate();
-      if (latest && latest !== current) {
-        updateUrl = url;
-        btn.textContent = 'Update available: v' + latest + ' — click to download';
+      const { current, latest, zipUrl } = await shadow.checkUpdate();
+      if (latest && latest !== current && zipUrl) {
+        updateZip = zipUrl;
+        btn.textContent = 'Update available: v' + latest + ' — click to install';
       } else {
         btn.textContent = 'Up to date (v' + current + ')';
       }

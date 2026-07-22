@@ -229,11 +229,47 @@ async function runFeature(mode, userText) {
 // -------- IPC -------- 
 ipcMain.handle('app:getVersion', () => app.getVersion());
 ipcMain.handle('app:checkUpdate', async () => {
-  // ponytail: no code-signing cert -> no silent Squirrel auto-update, just check + link.
+  // ponytail: no code-signing cert -> no silent Squirrel auto-update; this checks
+  // GitHub releases and, on mac, installs on click via a swap-and-relaunch script.
   const res = await fetch('https://api.github.com/repos/rudrathegod/shadow/releases/latest');
   const rel = await res.json();
   const latest = (rel.tag_name || '').replace(/^v/, '');
-  return { current: app.getVersion(), latest, url: rel.html_url };
+  const asset = (rel.assets || []).find((a) => a.name === 'shadow-mac.zip');
+  return { current: app.getVersion(), latest, url: rel.html_url, zipUrl: asset && asset.browser_download_url };
+});
+
+ipcMain.handle('app:installUpdate', async (_e, zipUrl) => {
+  if (process.platform !== 'darwin' || !app.isPackaged) {
+    shell.openExternal(zipUrl);
+    return { ok: false };
+  }
+  const fs = require('fs');
+  const os = require('os');
+  const { execFileSync, spawn } = require('child_process');
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shadow-update-'));
+  const zipPath = path.join(tmp, 'shadow-mac.zip');
+  const res = await fetch(zipUrl);
+  fs.writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
+  execFileSync('unzip', ['-o', zipPath, '-d', tmp]);
+
+  const newApp = path.join(tmp, 'shadow.app');
+  const currentApp = path.resolve(process.resourcesPath, '..', '..'); // .../shadow.app
+
+  // Swap after this process exits: remove old bundle, move new one in, clear
+  // quarantine (same as after-sign.js does at build time), relaunch.
+  const script = path.join(tmp, 'apply-update.sh');
+  fs.writeFileSync(script, `#!/bin/bash
+while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done
+rm -rf "${currentApp}"
+mv "${newApp}" "${currentApp}"
+xattr -cr "${currentApp}"
+open "${currentApp}"
+`, { mode: 0o755 });
+
+  spawn('/bin/bash', [script], { detached: true, stdio: 'ignore' }).unref();
+  app.quit();
+  return { ok: true };
 });
 ipcMain.handle('settings:get', () => store.getSettings());
 ipcMain.handle('settings:set', (_e, patch) => { 
