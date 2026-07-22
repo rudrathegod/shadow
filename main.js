@@ -66,11 +66,6 @@ function createWindow() {
     skipTaskbar: true,
     alwaysOnTop: true,
     fullscreenable: false,
-    // macOS: render as a non-activating NSPanel (same trick Spotlight/Alfred/Raycast use).
-    // Lets the window accept clicks + keyboard input without ever making shadow the
-    // "active app" or stealing key-window status from whatever you were using
-    // (e.g. Chrome), so no focus/blur events fire there when you click or type in shadow.
-    ...(process.platform === 'darwin' ? { type: 'panel' } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

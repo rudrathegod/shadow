@@ -184,38 +184,29 @@
   }
 
   // ---- capture: system/meeting audio (getDisplayMedia loopback, in shadow's process) ----
-  let sysStream = null, sysCtx = null, sysNode = null, sysProc = null, sysStarting = null, sysWanted = false;
+  let sysStream = null, sysCtx = null, sysNode = null, sysProc = null;
   async function startSystemAudio() {
-    sysWanted = true;
     if (sysStream) return;
-    if (sysStarting) return sysStarting;
-    sysStarting = (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        if (!sysWanted) { stream.getTracks().forEach((t) => t.stop()); return; }
-        stream.getVideoTracks().forEach((t) => t.stop()); // we only want the audio
-        const tracks = stream.getAudioTracks();
-        if (!tracks.length) { shadow.log('system audio: no loopback track (macOS loopback unsupported here)'); stream.getTracks().forEach((t) => t.stop()); return; }
-        sysStream = stream;
-        sysCtx = new AudioContext({ sampleRate: 16000 });
-        sysNode = sysCtx.createMediaStreamSource(new MediaStream(tracks));
-        sysProc = sysCtx.createScriptProcessor(4096, 1, 1);
-        const sink = sysCtx.createGain(); sink.gain.value = 0;
-        sysNode.connect(sysProc); sysProc.connect(sink); sink.connect(sysCtx.destination);
-        sysProc.onaudioprocess = (e) => {
-          shadow.systemPcm(toInt16(e.inputBuffer.getChannelData(0)).buffer);
-        };
-        shadow.log('system audio: capturing loopback');
-      } catch (err) {
-        shadow.log('system audio error: ' + (err && err.message));
-      } finally {
-        sysStarting = null;
-      }
-    })();
-    return sysStarting;
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      stream.getVideoTracks().forEach((t) => t.stop()); // we only want the audio
+      const tracks = stream.getAudioTracks();
+      if (!tracks.length) { shadow.log('system audio: no loopback track (macOS loopback unsupported here)'); stream.getTracks().forEach((t) => t.stop()); return; }
+      sysStream = stream;
+      sysCtx = new AudioContext({ sampleRate: 16000 });
+      sysNode = sysCtx.createMediaStreamSource(new MediaStream(tracks));
+      sysProc = sysCtx.createScriptProcessor(4096, 1, 1);
+      const sink = sysCtx.createGain(); sink.gain.value = 0;
+      sysNode.connect(sysProc); sysProc.connect(sink); sink.connect(sysCtx.destination);
+      sysProc.onaudioprocess = (e) => {
+        shadow.systemPcm(toInt16(e.inputBuffer.getChannelData(0)).buffer);
+      };
+      shadow.log('system audio: capturing loopback');
+    } catch (err) {
+      shadow.log('system audio error: ' + (err && err.message));
+    }
   }
   function stopSystemAudio() {
-    sysWanted = false;
     if (sysProc) { sysProc.disconnect(); sysProc.onaudioprocess = null; sysProc = null; }
     if (sysNode) { sysNode.disconnect(); sysNode = null; }
     if (sysCtx) { sysCtx.close(); sysCtx = null; }
@@ -298,13 +289,7 @@
     const stt = k.openai ? 'Whisper' : (k.gemini ? 'Gemini' : 'none');
     return 'Active: ' + settings.provider + ' · keys: ' + (has.join(', ') || 'none set') + ' · transcription: ' + stt;
   }
-  function syncCurrentModelFields() {
-    if (!settings.models[settings.provider]) settings.models[settings.provider] = {};
-    settings.models[settings.provider].fast = $('#model-fast').value.trim();
-    settings.models[settings.provider].smart = $('#model-smart').value.trim();
-  }
   document.querySelectorAll('#provider-seg button').forEach((b) => b.addEventListener('click', () => {
-    syncCurrentModelFields();
     settings.provider = b.dataset.provider;
     document.querySelectorAll('#provider-seg button').forEach((x) => x.classList.toggle('on', x === b));
     const m = settings.models[settings.provider] || { fast: '', smart: '' };
@@ -315,7 +300,9 @@
     settings.apiKeys.openai = $('#key-openai').value.trim();
     settings.apiKeys.anthropic = $('#key-anthropic').value.trim();
     settings.apiKeys.gemini = $('#key-gemini').value.trim();
-    syncCurrentModelFields();
+    if (!settings.models[settings.provider]) settings.models[settings.provider] = {};
+    settings.models[settings.provider].fast = $('#model-fast').value.trim();
+    settings.models[settings.provider].smart = $('#model-smart').value.trim();
     await shadow.settingsSet(settings);
   }
 
