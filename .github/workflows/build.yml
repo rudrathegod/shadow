@@ -3,42 +3,16 @@ name: Build zips
 on:
   workflow_dispatch:
   push:
-    branches: [main]
     tags: ['v*']
 
 permissions:
   contents: write
 
 jobs:
-  tag:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.tag.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: tag
-        name: Tag release if version is new
-        run: |
-          VERSION="v$(node -p "require('./package.json').version")"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q "$VERSION"; then
-            echo "Tag $VERSION already exists, skipping."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag "$VERSION"
-            git push origin "$VERSION"
-          fi
-
   build-mac:
-    needs: [tag]
-    if: always() && needs.tag.result != 'failure'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.tag.outputs.version || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -49,20 +23,15 @@ jobs:
           name: shadow-mac
           path: dist/shadow-mac.zip
       - name: Attach to release
-        if: needs.tag.outputs.version || startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.tag.outputs.version || github.ref_name }}
           files: dist/shadow-mac.zip
 
   build-win:
-    needs: [tag]
-    if: always() && needs.tag.result != 'failure'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.tag.outputs.version || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -73,8 +42,7 @@ jobs:
           name: shadow-win
           path: dist/shadow-win.zip
       - name: Attach to release
-        if: needs.tag.outputs.version || startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.tag.outputs.version || github.ref_name }}
           files: dist/shadow-win.zip
