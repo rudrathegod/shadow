@@ -137,12 +137,19 @@
     await shadow.settingsSet({ smart: settings.smart });
   });
 
-  // Hide / collapse
-  $('#hide-btn').addEventListener('click', () => {
-    const collapsed = $('#panel').classList.toggle('collapsed');
+  function setCollapsed(collapsed) {
+    $('#panel').classList.toggle('collapsed', collapsed);
     $('#hide-btn').classList.toggle('collapsed', collapsed);
     $('#live-dot').style.display = collapsed ? 'none' : '';
-  });
+  }
+
+  function scrollOverlay(direction) {
+    const delta = direction === 'up' ? -180 : 180;
+    messages.scrollBy({ top: delta, behavior: 'smooth' });
+  }
+
+  // Hide / collapse
+  $('#hide-btn').addEventListener('click', () => setCollapsed(!$('#panel').classList.contains('collapsed')));
 
   // Stop = start/stop listening. Kick off system-audio capture straight from the click so
   // the user-gesture is fresh for getDisplayMedia (loopback capture needs it).
@@ -229,6 +236,7 @@
     $('#stop-btn').classList.toggle('active', active);
     if (active) { startMic(); startSystemAudio(); } else { stopMic(); stopSystemAudio(); }
   });
+  shadow.on('overlay:scroll', ({ direction }) => scrollOverlay(direction));
   shadow.on('llm:start', ({ userBubble, small }) => {
     clearMessages();
     if (userBubble) addUserBubble(userBubble);

@@ -124,6 +124,8 @@ shadow is hidden from most screen-share tools automatically — **Google Meet, M
 
 - **`⌘` `↵` — Assist.** The do-the-smart-thing key. On a coding problem it solves it; in a conversation it tells you what to say. Works from anywhere.
 - **`⌘` `H` — Solve what's on screen.** Screenshots a coding problem and returns the approach, code, and time/space complexity.
+- **`Ctrl` `↓` — Scroll the overlay down.** Moves through longer answers without clicking it.
+- **`Ctrl` `↑` — Scroll the overlay up.** Moves back through longer answers without clicking it.
 - **The `▢` button** (top bar) — start/stop **listening** to a meeting. The green dot means it's live.
 - **Type a question** in the box and press `↵` to ask about your screen or conversation.
 - **Smart** — flip it on for a smarter, more thorough model; off for fast and cheap.
@@ -137,6 +139,7 @@ Same shortcuts, with `Ctrl` instead of `⌘`:
 
 - **`Ctrl` `↵` — Assist.**
 - **`Ctrl` `H` — Solve the coding problem on screen.**
+- **`Ctrl` `↓` / `Ctrl` `↑` — Scroll the overlay down / up.**
 - **Quit** with `Ctrl` `Shift` `X`.
 
 Permissions are simpler too: Windows prompts for **Microphone** and screen-share access the first time you use a feature — click **Allow** and you're done. No manual settings to hunt down.
