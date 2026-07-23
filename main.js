@@ -4,8 +4,9 @@ const store = require('./src/store');
 const { captureScreenshot } = require('./src/screen'); 
 const { createSTT } = require('./src/stt'); 
 const { createLLM } = require('./src/llm'); 
-const { MODES } = require('./src/prompts'); 
-const { rms16 } = require('./src/wav'); 
+const { MODES } = require('./src/prompts');
+const { rms16 } = require('./src/wav');
+const { extractCode, stripFences, runSandboxed } = require('./src/verify');
 
 // Disable Chromium GPU acceleration before app readiness to avoid spawning a
 // separate GPU helper process for this lightweight overlay.
@@ -60,7 +61,7 @@ function setWindowPosition(preset) {
 // -------- window -------- 
 function createWindow() { 
   const settings = store.getSettings(); 
-  const W = 700, H = 600; 
+  const W = 700, H = 780; 
   const { x, y } = computePosition(settings.windowPosition, W, H); 
 
   win = new BrowserWindow({ 
@@ -183,41 +184,100 @@ function setCapturing(active) {
   return active; 
 } 
 
-// -------- feature runner -------- 
-async function runFeature(mode, userText) { 
-  if (state.busy) return; 
-  const def = MODES[mode]; 
-  if (!def) return; 
-  state.busy = true; 
-  try { 
-    const settings = store.getSettings(); 
-    const llm = createLLM(settings); 
-    const userBubble = def.userBubble !== null ? def.userBubble : (mode === 'ask' ? userText : null); 
-    send('llm:start', { userBubble, small: !!def.small }); 
+// -------- screenshot capture (shared by single-shot and batched capture) --------
+async function captureOneScreenshot() {
+  const access = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted';
+  if (access === 'denied') {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    send('status', { message: 'Screen capture needs permission — opening System Settings. Grant Screen Recording to shadow, then fully quit and reopen the app.' });
+    return null;
+  }
+  // 'granted' or 'not-determined' — attempt the capture either way. When
+  // not-determined (e.g. right after removing shadow from the Screen
+  // Recording list), this is what actually triggers macOS's native
+  // permission prompt; checking status alone never does.
+  try {
+    return await captureScreenshot();
+  } catch (e) {
+    send('status', { message: 'Screen capture failed: ' + (e && e.message ? e.message : e) });
+    return null;
+  }
+}
 
-    if (!llm.ready) { 
-      send('llm:error', { message: 'Add your ' + settings.provider + ' API key in Settings (gear icon) to start. Model: ' + (llm.model || 'unset') + '.' }); 
-      return; 
-    } 
+// -------- self-check: run the model's own code against its own test harness --------
+async function verifyAndRepair(llm, answerText) {
+  const extracted = extractCode(answerText);
+  if (!extracted || !extracted.lang) return {};
+  const lang = extracted.lang;
+  const silent = (system, userText) => llm.stream({ system, turns: [{ role: 'user', text: userText }], onToken: () => {} }).catch(() => '');
 
-    let imageDataUrl = null; 
-    if (def.needsScreen) { 
-      const access = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted';
-      if (access === 'denied') {
-        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-        send('status', { message: 'Screen capture needs permission — opening System Settings. Grant Screen Recording to shadow, then fully quit and reopen the app.' });
-      } else {
-        // 'granted' or 'not-determined' — attempt the capture either way. When
-        // not-determined (e.g. right after removing shadow from the Screen
-        // Recording list), this is what actually triggers macOS's native
-        // permission prompt; checking status alone never does.
-        try { 
-          imageDataUrl = await captureScreenshot(); 
-        } catch (e) { 
-          send('status', { message: 'Screen capture failed: ' + (e && e.message ? e.message : e) }); 
-        } 
-      } 
-    } 
+  const harnessRaw = await silent(
+    `You write short, self-contained test scripts. Given a solution's code, output ONLY a runnable ${lang} script ` +
+    `(no prose, no markdown fences) that checks a few edge cases and typical cases with explicit expected values, ` +
+    `calls the solution, and exits non-zero (raise/throw or process.exit(1)/sys.exit(1)) on any mismatch, or exits 0 if everything passes.`,
+    'Solution:\n\n' + extracted.code
+  );
+  const harness = stripFences(harnessRaw);
+  if (!harness) return {};
+
+  const first = await runSandboxed(lang, extracted.code + '\n\n' + harness);
+  if (!first.supported || first.unavailable) return {};
+  if (first.ok) return { note: 'Self-test passed.' };
+
+  const fixedRaw = await silent(
+    `Fix the bug in this solution so it passes the given test. Return ONLY the corrected solution in a single fenced ${lang} code block, no prose.`,
+    `Original solution:\n${extracted.code}\n\nTest:\n${harness}\n\nFailure:\n${first.error}`
+  );
+  const fixed = extractCode(fixedRaw);
+  if (!fixed) return { note: 'Self-test failed: ' + first.error };
+
+  const retry = await runSandboxed(lang, fixed.code + '\n\n' + harness);
+  if (retry.ok) {
+    const newText = answerText.replace(/```[\s\S]*?```/, '```' + lang + '\n' + fixed.code + '\n```');
+    return { text: newText, note: 'Found and fixed a bug during self-test.' };
+  }
+  return { note: `Self-test still failing after one fix attempt: ${retry.error} — double check before using.` };
+}
+
+// -------- Cmd+H batching: ⌘⇧H adds a screenshot without solving, ⌘H solves using all of them --------
+let pendingShots = [];
+async function addScreenshotToBatch() {
+  const img = await captureOneScreenshot();
+  if (!img) return;
+  pendingShots.push(img);
+  send('status', { message: `Added screenshot ${pendingShots.length} to the batch — press ⌘H to solve using all of them, or ⌘⇧H to add more.` });
+}
+async function captureAndSolve() {
+  if (state.busy) return;
+  const img = await captureOneScreenshot();
+  const images = pendingShots.concat(img ? [img] : []);
+  pendingShots = [];
+  if (!images.length) return; // capture failed; status already shown
+  runFeature('leetcode', '', images);
+}
+
+// -------- feature runner --------
+async function runFeature(mode, userText, presetImages) {
+  if (state.busy) return;
+  const def = MODES[mode];
+  if (!def) return;
+  state.busy = true;
+  try {
+    const settings = store.getSettings();
+    const llm = createLLM(settings);
+    const userBubble = def.userBubble !== null ? def.userBubble : (mode === 'ask' ? userText : null);
+    send('llm:start', { userBubble, small: !!def.small });
+
+    if (!llm.ready) {
+      send('llm:error', { message: 'Add your ' + settings.provider + ' API key in Settings (gear icon) to start. Model: ' + (llm.model || 'unset') + '.' });
+      return;
+    }
+
+    let images = presetImages || [];
+    if (!presetImages && def.needsScreen) {
+      const img = await captureOneScreenshot();
+      if (img) images = [img];
+    }
 
     const built = def.build({ transcript, userText: userText || '' });
 
@@ -239,7 +299,7 @@ async function runFeature(mode, userText) {
           llm.stream({
             system: def.system,
             turns: [{ role: 'user', text: built }],
-            imageDataUrl,
+            imageDataUrls: images,
             onToken: (t) => { send('llm:token', { text: t }); resetIdle(); }
           }),
           idle
@@ -260,6 +320,16 @@ async function runFeature(mode, userText) {
     if (!full || !full.trim()) {
       send('llm:error', { message: 'The model returned an empty response twice in a row (it may have declined to answer, or hit its output limit). Try again.' });
     } else {
+      if (mode === 'leetcode') {
+        send('status', { message: 'Verifying the solution runs correctly…' });
+        const verified = await verifyAndRepair(llm, full);
+        if (verified.text) {
+          full = verified.text;
+          send('llm:start', { userBubble, small: !!def.small });
+          send('llm:token', { text: full });
+        }
+        if (verified.note) send('status', { message: verified.note });
+      }
       send('llm:done', {});
     }
   } catch (e) { 
@@ -346,7 +416,8 @@ ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg));
 // -------- shortcuts -------- 
 function registerShortcuts() { 
   globalShortcut.register('CommandOrControl+Return', () => runFeature('assist', '')); 
-  globalShortcut.register('CommandOrControl+H', () => runFeature('leetcode', '')); 
+  globalShortcut.register('CommandOrControl+H', () => captureAndSolve());
+  globalShortcut.register('CommandOrControl+Shift+H', () => addScreenshotToBatch());
   globalShortcut.register('CommandOrControl+Down', () => send('overlay:scroll', { direction: 'down' }));
   globalShortcut.register('CommandOrControl+Up', () => send('overlay:scroll', { direction: 'up' }));
   globalShortcut.register('CommandOrControl+Shift+X', () => app.quit()); 

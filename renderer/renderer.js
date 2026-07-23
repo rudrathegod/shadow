@@ -415,7 +415,7 @@
     {
       icon: '✨',
       title: 'You’re all set',
-      body: `How to use shadow:<ul><li><span class="kbd">${mod}</span> <span class="kbd">↵</span> — <strong>Assist</strong> with whatever's on screen or being said</li><li><span class="kbd">${mod}</span> <span class="kbd">H</span> — solve a coding problem on screen</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with <span class="kbd">${mod}</span><span class="kbd">${shiftKey}</span><span class="kbd">X</span>.`
+      body: `How to use shadow:<ul><li><span class="kbd">${mod}</span> <span class="kbd">↵</span> — <strong>Assist</strong> with whatever's on screen or being said</li><li><span class="kbd">${mod}</span> <span class="kbd">H</span> — solve a coding problem on screen</li><li><span class="kbd">${mod}</span> <span class="kbd">${shiftKey}</span> <span class="kbd">H</span> — add another screenshot before solving (for problems that need scrolling)</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with <span class="kbd">${mod}</span><span class="kbd">${shiftKey}</span><span class="kbd">X</span>.`
     }
   ];
   let obIndex = 0;

@@ -1,6 +1,6 @@
 {
   "name": "shadow",
-  "version": "0.1.91",
+  "version": "2.0.0",
   "description": "Open-source macOS invisible AI overlay — three separate inputs (screen, mic, system audio) into an LLM. A Cluely-style copilot for meetings and coding problems.",
   "license": "UNLICENSED",
   "author": "shadow",
@@ -75,6 +75,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@google/genai": "^0.3.0",
+    "jsdom": "^29.1.1",
     "openai": "^4.73.0"
   }
 }

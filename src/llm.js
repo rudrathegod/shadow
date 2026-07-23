@@ -1,21 +1,22 @@
 // LLM factory — OpenAI / Anthropic / Gemini behind one streaming interface.
-// stream({ system, turns:[{role,text}], imageDataUrl, maxTokens, onToken }) -> Promise<fullText>
+// stream({ system, turns:[{role,text}], imageDataUrls, maxTokens, onToken }) -> Promise<fullText>
+// imageDataUrls: optional array of data: URLs, all attached to the final user turn.
 
 function stripDataUrl(dataUrl) {
   const m = /^data:(.+?);base64,(.*)$/s.exec(dataUrl || '');
   return m ? { mime: m[1], b64: m[2] } : null;
 }
 
-async function streamOpenAI({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+async function streamOpenAI({ apiKey, model, system, turns, imageDataUrls, maxTokens, onToken }) {
   const OpenAI = require('openai');
   const client = new OpenAI({ apiKey });
   const messages = [{ role: 'system', content: system }];
   turns.forEach((t, i) => {
     const last = i === turns.length - 1;
-    if (last && imageDataUrl && t.role === 'user') {
+    if (last && imageDataUrls && imageDataUrls.length && t.role === 'user') {
       messages.push({ role: 'user', content: [
         { type: 'text', text: t.text },
-        { type: 'image_url', image_url: { url: imageDataUrl } }
+        ...imageDataUrls.map((url) => ({ type: 'image_url', image_url: { url } }))
       ] });
     } else {
       messages.push({ role: t.role, content: t.text });
@@ -30,15 +31,16 @@ async function streamOpenAI({ apiKey, model, system, turns, imageDataUrl, maxTok
   return full;
 }
 
-async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+async function streamAnthropic({ apiKey, model, system, turns, imageDataUrls, maxTokens, onToken }) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
   const messages = turns.map((t, i) => {
     const last = i === turns.length - 1;
-    if (last && imageDataUrl && t.role === 'user') {
-      const img = stripDataUrl(imageDataUrl);
-      const content = [];
-      if (img) content.push({ type: 'image', source: { type: 'base64', media_type: img.mime, data: img.b64 } });
+    if (last && imageDataUrls && imageDataUrls.length && t.role === 'user') {
+      const content = imageDataUrls
+        .map(stripDataUrl)
+        .filter(Boolean)
+        .map((img) => ({ type: 'image', source: { type: 'base64', media_type: img.mime, data: img.b64 } }));
       content.push({ type: 'text', text: t.text });
       return { role: 'user', content };
     }
@@ -52,15 +54,16 @@ async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, max
   return full;
 }
 
-async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+async function streamGemini({ apiKey, model, system, turns, imageDataUrls, maxTokens, onToken }) {
   const { GoogleGenAI } = require('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
   const contents = turns.map((t, i) => {
     const last = i === turns.length - 1;
     const parts = [{ text: t.text }];
-    if (last && imageDataUrl && t.role === 'user') {
-      const img = stripDataUrl(imageDataUrl);
-      if (img) parts.push({ inlineData: { mimeType: img.mime, data: img.b64 } });
+    if (last && imageDataUrls && imageDataUrls.length && t.role === 'user') {
+      imageDataUrls.map(stripDataUrl).filter(Boolean).forEach((img) => {
+        parts.push({ inlineData: { mimeType: img.mime, data: img.b64 } });
+      });
     }
     return { role: t.role === 'assistant' ? 'model' : 'user', parts };
   });
