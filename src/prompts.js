@@ -89,8 +89,8 @@ const MODES = {
     small: false,
     system:
       'You are an expert competitive programmer. The screenshot contains a coding problem. ' +
-      'Respond with: (1) a one-line restatement, (2) a short approach, (3) a clean, correct, idiomatic solution in a fenced code block ' +
-      '(use the language shown on screen, else Python), (4) time and space complexity. Keep prose tight.',
+      'Respond with: (1) a clean, correct, idiomatic solution in a fenced code block ' +
+      '(use the language shown on screen, else Python), (2) a one-line restatement, (3) a short approach, (4) time and space complexity. Keep prose tight.',
     build() { return 'Solve the coding problem shown in the screenshot.'; }
   }
 };

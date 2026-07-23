@@ -307,8 +307,8 @@ ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg));
 function registerShortcuts() { 
   globalShortcut.register('CommandOrControl+Return', () => runFeature('assist', '')); 
   globalShortcut.register('CommandOrControl+H', () => runFeature('leetcode', '')); 
-  globalShortcut.register('Control+Down', () => send('overlay:scroll', { direction: 'down' })); 
-  globalShortcut.register('Control+Up', () => send('overlay:scroll', { direction: 'up' })); 
+  globalShortcut.register('CommandOrControl+Down', () => send('overlay:scroll', { direction: 'down' }));
+  globalShortcut.register('CommandOrControl+Up', () => send('overlay:scroll', { direction: 'up' }));
   globalShortcut.register('CommandOrControl+Shift+X', () => app.quit()); 
 } 
 

@@ -8,10 +8,21 @@
   #status { font-size: 1.5rem; }
   #log { margin-top: 1rem; white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; color: #9f9; background: #000; padding: 1rem; border-radius: 6px; height: 220px; overflow-y: auto; }
   .away { color: #f66; }
+  .ok { color: #64d37a; }
+  .warn { color: #ffcf5a; }
 
   .question { margin-top: 2rem; padding: 1.25rem; background: #1b1b1b; border: 1px solid #333; border-radius: 8px; }
   .question h2 { margin-top: 0; font-size: 1.1rem; }
   .question pre { background: #000; padding: 0.75rem; border-radius: 6px; overflow-x: auto; }
+  .capture-test { margin-top: 1rem; padding: 1.25rem; background: #171717; border: 1px solid #333; border-radius: 8px; }
+  .capture-test h2 { margin-top: 0; font-size: 1.1rem; }
+  .capture-test p { color: #bbb; line-height: 1.45; }
+  .capture-row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-top: 0.75rem; }
+  .capture-row button { padding: 0.5rem 1rem; background: #2d6cdf; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+  .capture-row button.secondary { background: #333; }
+  .capture-row button:hover { filter: brightness(1.1); }
+  #captureStatus { font-family: monospace; color: #999; }
+  #captureSummary { margin-top: 0.75rem; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; background: #000; border: 1px solid #2a2a2a; border-radius: 6px; padding: 0.75rem; min-height: 3.5rem; }
   textarea#answer {
     width: 100%;
     height: 220px;
@@ -38,6 +49,25 @@
 <p>Open this page in Chrome, then switch to your Electron app and back. Watch the log below (also mirrored to DevTools console).</p>
 <div id="log"></div>
 
+<div class="capture-test">
+  <h2>Screenshot Detection Test</h2>
+  <p>
+    Browser pages cannot directly detect an OS-level screenshot or Electron
+    <code>desktopCapturer</code> call. This tester watches for the signals a page can observe:
+    focus/blur, visibility changes, page lifecycle events, resize, fullscreen changes, and pointer leave.
+  </p>
+  <p>
+    Click <strong>Arm Screenshot Test</strong>, trigger your app's screenshot shortcut while this page is visible,
+    then check whether any observable events fired during the armed window.
+  </p>
+  <div class="capture-row">
+    <button id="armCaptureBtn">Arm Screenshot Test</button>
+    <button id="clearCaptureBtn" class="secondary">Clear Capture Events</button>
+    <span id="captureStatus">Not armed</span>
+  </div>
+  <div id="captureSummary">No screenshot test has run yet.</div>
+</div>
+
 <div class="question">
   <h2>Java Question: Reverse Words in a Sentence</h2>
   <p>Write a Java method with the following signature:</p>
@@ -57,7 +87,14 @@
 <script>
   const statusEl = document.getElementById('status');
   const logEl = document.getElementById('log');
+  const armCaptureBtn = document.getElementById('armCaptureBtn');
+  const clearCaptureBtn = document.getElementById('clearCaptureBtn');
+  const captureStatusEl = document.getElementById('captureStatus');
+  const captureSummaryEl = document.getElementById('captureSummary');
   let awaySince = null;
+  let captureArmedUntil = 0;
+  let captureCountdown = null;
+  let captureEvents = [];
 
   function log(msg) {
     const ts = new Date().toLocaleTimeString();
@@ -67,26 +104,113 @@
     logEl.scrollTop = logEl.scrollHeight;
   }
 
+  function recordObservableSignal(name, detail) {
+    const armed = Date.now() <= captureArmedUntil;
+    const suffix = detail ? ' - ' + detail : '';
+    log(name + suffix + (armed ? ' [during armed screenshot test]' : ''));
+    if (armed) {
+      captureEvents.push({ name, detail: detail || '', at: Date.now() });
+      renderCaptureSummary();
+    }
+  }
+
+  function renderCaptureSummary() {
+    if (!captureEvents.length) {
+      captureSummaryEl.className = 'ok';
+      captureSummaryEl.textContent =
+        'No observable browser events recorded during the armed window.\n' +
+        'Result: this page did not detect the screenshot through web-visible signals.';
+      return;
+    }
+    captureSummaryEl.className = 'warn';
+    captureSummaryEl.textContent =
+      'Observable events recorded during the armed window:\n' +
+      captureEvents.map((event, index) => {
+        const ts = new Date(event.at).toLocaleTimeString();
+        return `${index + 1}. [${ts}] ${event.name}${event.detail ? ' - ' + event.detail : ''}`;
+      }).join('\n') +
+      '\n\nResult: the page saw side effects around the screenshot trigger. Review whether these came from focus changes, shortcuts, or app activation.';
+  }
+
+  function armCaptureTest() {
+    captureEvents = [];
+    captureArmedUntil = Date.now() + 10000;
+    renderCaptureSummary();
+    log('SCREENSHOT_TEST_ARMED - 10 second window started');
+    clearInterval(captureCountdown);
+    captureCountdown = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((captureArmedUntil - Date.now()) / 1000));
+      captureStatusEl.textContent = remaining ? `Armed: ${remaining}s remaining` : 'Not armed';
+      if (!remaining) {
+        clearInterval(captureCountdown);
+        captureCountdown = null;
+        captureArmedUntil = 0;
+        recordObservableSignal('SCREENSHOT_TEST_DONE', captureEvents.length ? `${captureEvents.length} observable event(s)` : 'no observable events');
+        renderCaptureSummary();
+      }
+    }, 250);
+  }
+
+  armCaptureBtn.addEventListener('click', armCaptureTest);
+  clearCaptureBtn.addEventListener('click', () => {
+    captureEvents = [];
+    captureArmedUntil = 0;
+    clearInterval(captureCountdown);
+    captureCountdown = null;
+    captureStatusEl.textContent = 'Not armed';
+    captureSummaryEl.className = '';
+    captureSummaryEl.textContent = 'Capture event history cleared.';
+    log('SCREENSHOT_TEST_CLEARED');
+  });
+
   window.onblur = () => {
     awaySince = Date.now();
     statusEl.textContent = 'Browser lost focus';
     statusEl.className = 'away';
-    log('BLUR - window.onblur fired');
+    recordObservableSignal('BLUR', 'window.onblur fired');
   };
 
   window.onfocus = () => {
     statusEl.textContent = 'Browser focused';
     statusEl.className = '';
     if (awaySince) {
-      log(`FOCUS - window.onfocus fired (away for ${Date.now() - awaySince}ms)`);
+      recordObservableSignal('FOCUS', `window.onfocus fired (away for ${Date.now() - awaySince}ms)`);
       awaySince = null;
     } else {
-      log('FOCUS - window.onfocus fired');
+      recordObservableSignal('FOCUS', 'window.onfocus fired');
     }
   };
 
   document.addEventListener('visibilitychange', () => {
-    log('visibilitychange -> ' + document.visibilityState);
+    recordObservableSignal('VISIBILITYCHANGE', document.visibilityState);
+  });
+
+  window.addEventListener('resize', () => {
+    recordObservableSignal('RESIZE', `${window.innerWidth}x${window.innerHeight}`);
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    recordObservableSignal('FULLSCREENCHANGE', document.fullscreenElement ? 'entered fullscreen' : 'exited fullscreen');
+  });
+
+  document.addEventListener('pointerleave', () => {
+    recordObservableSignal('POINTERLEAVE', 'pointer left document');
+  });
+
+  window.addEventListener('pagehide', () => {
+    recordObservableSignal('PAGEHIDE', 'pagehide fired');
+  });
+
+  window.addEventListener('pageshow', () => {
+    recordObservableSignal('PAGESHOW', 'pageshow fired');
+  });
+
+  document.addEventListener('freeze', () => {
+    recordObservableSignal('FREEZE', 'page lifecycle freeze');
+  });
+
+  document.addEventListener('resume', () => {
+    recordObservableSignal('RESUME', 'page lifecycle resume');
   });
 
   log('Test page loaded. Waiting for focus/blur/visibility events...');
