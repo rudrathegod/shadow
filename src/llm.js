@@ -81,7 +81,9 @@ function createLLM(settings) {
   const apiKey = keys[provider];
   const tier = settings.smart ? 'smart' : 'fast';
   const model = (settings.models[provider] || {})[tier];
-  const maxTokens = settings.smart ? 1400 : 700;
+  // Generous enough that a full code answer (code + explanation + complexity)
+  // doesn't get cut off mid-response.
+  const maxTokens = settings.smart ? 6000 : 3000;
 
   return {
     provider, model, apiKey,

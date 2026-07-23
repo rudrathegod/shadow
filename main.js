@@ -220,13 +220,45 @@ async function runFeature(mode, userText) {
     } 
 
     const built = def.build({ transcript, userText: userText || '' });
-    const STREAM_TIMEOUT_MS = 25000;
-    const full = await Promise.race([
-      llm.stream({ system: def.system, turns: [{ role: 'user', text: built }], imageDataUrl, onToken: (t) => send('llm:token', { text: t }) }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`No response after ${STREAM_TIMEOUT_MS / 1000}s — check your network or API key access and try again.`)), STREAM_TIMEOUT_MS))
-    ]);
+
+    // Idle timeout: resets on every token, so a long-but-flowing answer never
+    // gets cut off — only a genuine stall (no tokens for 25s) trips it.
+    const IDLE_TIMEOUT_MS = 25000;
+    async function attempt() {
+      let rejectIdle, idleTimer;
+      const idle = new Promise((_, reject) => {
+        rejectIdle = reject;
+        idleTimer = setTimeout(() => reject(new Error(`No response after ${IDLE_TIMEOUT_MS / 1000}s — check your network or API key access and try again.`)), IDLE_TIMEOUT_MS);
+      });
+      const resetIdle = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => rejectIdle(new Error(`No response after ${IDLE_TIMEOUT_MS / 1000}s — check your network or API key access and try again.`)), IDLE_TIMEOUT_MS);
+      };
+      try {
+        return await Promise.race([
+          llm.stream({
+            system: def.system,
+            turns: [{ role: 'user', text: built }],
+            imageDataUrl,
+            onToken: (t) => { send('llm:token', { text: t }); resetIdle(); }
+          }),
+          idle
+        ]);
+      } finally {
+        clearTimeout(idleTimer);
+      }
+    }
+
+    let full = await attempt();
+    // A handful of providers occasionally return a genuinely empty completion
+    // (transient safety pass, cold-start hiccup) with no error thrown — one
+    // silent retry clears most of these before bothering the user.
     if (!full || !full.trim()) {
-      send('llm:error', { message: 'The model returned an empty response (it may have declined to answer). Try again.' });
+      send('llm:start', { userBubble, small: !!def.small });
+      full = await attempt();
+    }
+    if (!full || !full.trim()) {
+      send('llm:error', { message: 'The model returned an empty response twice in a row (it may have declined to answer, or hit its output limit). Try again.' });
     } else {
       send('llm:done', {});
     }
