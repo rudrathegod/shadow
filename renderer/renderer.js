@@ -166,33 +166,42 @@
     return out;
   }
 
+  // ---- capture: shared silent-tap wiring (stream -> ScriptProcessor -> onPcm) ----
+  function makeAudioTap(stream, onPcm) {
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    const node = ctx.createMediaStreamSource(stream);
+    const proc = ctx.createScriptProcessor(4096, 1, 1);
+    const sink = ctx.createGain(); sink.gain.value = 0; // run processor silently
+    node.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+    proc.onaudioprocess = (e) => onPcm(toInt16(e.inputBuffer.getChannelData(0)).buffer);
+    return {
+      stop() {
+        proc.disconnect(); proc.onaudioprocess = null;
+        node.disconnect();
+        ctx.close();
+        stream.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }
+
   // ---- capture: mic (renderer side) --------------------------------------
-  let audioCtx = null, micStream = null, micNode = null, micProc = null;
+  let micStream = null, micTap = null;
   async function startMic() {
     if (micStream) return;
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-      audioCtx = new AudioContext({ sampleRate: 16000 });
-      micNode = audioCtx.createMediaStreamSource(micStream);
-      micProc = audioCtx.createScriptProcessor(4096, 1, 1);
-      const sink = audioCtx.createGain(); sink.gain.value = 0; // run processor silently
-      micNode.connect(micProc); micProc.connect(sink); sink.connect(audioCtx.destination);
-      micProc.onaudioprocess = (e) => {
-        shadow.micPcm(toInt16(e.inputBuffer.getChannelData(0)).buffer);
-      };
+      micTap = makeAudioTap(micStream, (buf) => shadow.micPcm(buf));
     } catch (err) {
       shadow.log('mic error: ' + (err && err.message));
     }
   }
   function stopMic() {
-    if (micProc) { micProc.disconnect(); micProc.onaudioprocess = null; micProc = null; }
-    if (micNode) { micNode.disconnect(); micNode = null; }
-    if (audioCtx) { audioCtx.close(); audioCtx = null; }
-    if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    if (micTap) { micTap.stop(); micTap = null; }
+    micStream = null;
   }
 
   // ---- capture: system/meeting audio (getDisplayMedia loopback, in shadow's process) ----
-  let sysStream = null, sysCtx = null, sysNode = null, sysProc = null, sysStarting = null, sysWanted = false;
+  let sysStream = null, sysTap = null, sysStarting = null, sysWanted = false;
   async function startSystemAudio() {
     sysWanted = true;
     if (sysStream) return;
@@ -204,15 +213,8 @@
         stream.getVideoTracks().forEach((t) => t.stop()); // we only want the audio
         const tracks = stream.getAudioTracks();
         if (!tracks.length) { shadow.log('system audio: no loopback track (macOS loopback unsupported here)'); stream.getTracks().forEach((t) => t.stop()); return; }
-        sysStream = stream;
-        sysCtx = new AudioContext({ sampleRate: 16000 });
-        sysNode = sysCtx.createMediaStreamSource(new MediaStream(tracks));
-        sysProc = sysCtx.createScriptProcessor(4096, 1, 1);
-        const sink = sysCtx.createGain(); sink.gain.value = 0;
-        sysNode.connect(sysProc); sysProc.connect(sink); sink.connect(sysCtx.destination);
-        sysProc.onaudioprocess = (e) => {
-          shadow.systemPcm(toInt16(e.inputBuffer.getChannelData(0)).buffer);
-        };
+        sysStream = new MediaStream(tracks);
+        sysTap = makeAudioTap(sysStream, (buf) => shadow.systemPcm(buf));
         shadow.log('system audio: capturing loopback');
       } catch (err) {
         shadow.log('system audio error: ' + (err && err.message));
@@ -224,10 +226,8 @@
   }
   function stopSystemAudio() {
     sysWanted = false;
-    if (sysProc) { sysProc.disconnect(); sysProc.onaudioprocess = null; sysProc = null; }
-    if (sysNode) { sysNode.disconnect(); sysNode = null; }
-    if (sysCtx) { sysCtx.close(); sysCtx = null; }
-    if (sysStream) { sysStream.getTracks().forEach((t) => t.stop()); sysStream = null; }
+    if (sysTap) { sysTap.stop(); sysTap = null; }
+    sysStream = null;
   }
 
   // ---- events from main --------------------------------------------------

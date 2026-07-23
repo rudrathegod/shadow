@@ -219,9 +219,17 @@ async function runFeature(mode, userText) {
       } 
     } 
 
-    const built = def.build({ transcript, userText: userText || '' }); 
-    await llm.stream({ system: def.system, turns: [{ role: 'user', text: built }], imageDataUrl, onToken: (t) => send('llm:token', { text: t }) }); 
-    send('llm:done', {}); 
+    const built = def.build({ transcript, userText: userText || '' });
+    const STREAM_TIMEOUT_MS = 25000;
+    const full = await Promise.race([
+      llm.stream({ system: def.system, turns: [{ role: 'user', text: built }], imageDataUrl, onToken: (t) => send('llm:token', { text: t }) }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`No response after ${STREAM_TIMEOUT_MS / 1000}s — check your network or API key access and try again.`)), STREAM_TIMEOUT_MS))
+    ]);
+    if (!full || !full.trim()) {
+      send('llm:error', { message: 'The model returned an empty response (it may have declined to answer). Try again.' });
+    } else {
+      send('llm:done', {});
+    }
   } catch (e) { 
     console.log('[llm] error', e && e.message);
     send('llm:error', { message: 'Error: ' + (e && e.message ? e.message : String(e)) }); 
