@@ -205,17 +205,21 @@ async function captureOneScreenshot() {
 }
 
 // -------- self-check: run the model's own code against its own test harness --------
-async function verifyAndRepair(llm, answerText) {
+async function verifyAndRepair(llm, answerText, images) {
   const extracted = extractCode(answerText);
   if (!extracted || !extracted.lang) return {};
   const lang = extracted.lang;
-  const silent = (system, userText) => llm.stream({ system, turns: [{ role: 'user', text: userText }], onToken: () => {} }).catch(() => '');
+  const silent = (system, userText, imageDataUrls) =>
+    llm.stream({ system, turns: [{ role: 'user', text: userText }], imageDataUrls, onToken: () => {} }).catch(() => '');
 
   const harnessRaw = await silent(
-    `You write short, self-contained test scripts. Given a solution's code, output ONLY a runnable ${lang} script ` +
-    `(no prose, no markdown fences) that checks a few edge cases and typical cases with explicit expected values, ` +
+    `You write short, self-contained test scripts. Given the ORIGINAL PROBLEM (screenshot) and a proposed solution's code, ` +
+    `output ONLY a runnable ${lang} script (no prose, no markdown fences) that checks edge cases called out or implied by ` +
+    `the problem statement (boundary values, out-of-range/invalid inputs, empty/min/max sizes) plus typical cases, with ` +
+    `explicit expected values derived from the problem — not from re-running the solution — ` +
     `calls the solution, and exits non-zero (raise/throw or process.exit(1)/sys.exit(1)) on any mismatch, or exits 0 if everything passes.`,
-    'Solution:\n\n' + extracted.code
+    'Solution:\n\n' + extracted.code,
+    images
   );
   const harness = stripFences(harnessRaw);
   if (!harness) return {};
@@ -225,8 +229,10 @@ async function verifyAndRepair(llm, answerText) {
   if (first.ok) return { note: 'Self-test passed.' };
 
   const fixedRaw = await silent(
-    `Fix the bug in this solution so it passes the given test. Return ONLY the corrected solution in a single fenced ${lang} code block, no prose.`,
-    `Original solution:\n${extracted.code}\n\nTest:\n${harness}\n\nFailure:\n${first.error}`
+    `Fix the bug in this solution so it passes the given test, staying faithful to the original problem (screenshot). ` +
+    `Return ONLY the corrected solution in a single fenced ${lang} code block, no prose.`,
+    `Original solution:\n${extracted.code}\n\nTest:\n${harness}\n\nFailure:\n${first.error}`,
+    images
   );
   const fixed = extractCode(fixedRaw);
   if (!fixed) return { note: 'Self-test failed: ' + first.error };
@@ -282,47 +288,51 @@ async function runFeature(mode, userText, presetImages) {
     const built = def.build({ transcript, userText: userText || '' });
 
     // Idle timeout: resets on every token, so a long-but-flowing answer never
-    // gets cut off — only a genuine stall (no tokens for 25s) trips it.
-    const IDLE_TIMEOUT_MS = 25000;
+    // gets cut off — only a genuine stall (no tokens for 45s) trips it.
+    // Some providers deliver the full answer but then hang before closing the
+    // stream (never fire their "done" event) — in that case we already have a
+    // complete-looking answer sitting in `acc`, so surface that instead of
+    // discarding it behind a hard error.
+    const IDLE_TIMEOUT_MS = 45000;
     async function attempt() {
-      let rejectIdle, idleTimer;
-      const idle = new Promise((_, reject) => {
-        rejectIdle = reject;
-        idleTimer = setTimeout(() => reject(new Error(`No response after ${IDLE_TIMEOUT_MS / 1000}s — check your network or API key access and try again.`)), IDLE_TIMEOUT_MS);
+      let acc = '';
+      let resetIdle, idleTimer;
+      const timedOut = new Promise((resolve) => {
+        idleTimer = setTimeout(() => resolve({ timedOut: true }), IDLE_TIMEOUT_MS);
+        resetIdle = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => resolve({ timedOut: true }), IDLE_TIMEOUT_MS); };
       });
-      const resetIdle = () => {
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => rejectIdle(new Error(`No response after ${IDLE_TIMEOUT_MS / 1000}s — check your network or API key access and try again.`)), IDLE_TIMEOUT_MS);
-      };
+      const streamed = llm.stream({
+        system: def.system,
+        turns: [{ role: 'user', text: built }],
+        imageDataUrls: images,
+        onToken: (t) => { acc += t; send('llm:token', { text: t }); resetIdle(); }
+      }).then((full) => ({ timedOut: false, full }));
       try {
-        return await Promise.race([
-          llm.stream({
-            system: def.system,
-            turns: [{ role: 'user', text: built }],
-            imageDataUrls: images,
-            onToken: (t) => { send('llm:token', { text: t }); resetIdle(); }
-          }),
-          idle
-        ]);
+        const result = await Promise.race([streamed, timedOut]);
+        if (!result.timedOut) return { text: result.full, stalled: false };
+        // A true hang with zero tokens is treated the same as an empty completion
+        // below — one silent retry — instead of surfacing an error on what's
+        // often just one bad connection.
+        return { text: acc, stalled: !!acc.trim() };
       } finally {
         clearTimeout(idleTimer);
       }
     }
 
-    let full = await attempt();
+    let { text: full, stalled } = await attempt();
     // A handful of providers occasionally return a genuinely empty completion
     // (transient safety pass, cold-start hiccup) with no error thrown — one
     // silent retry clears most of these before bothering the user.
     if (!full || !full.trim()) {
       send('llm:start', { userBubble, small: !!def.small });
-      full = await attempt();
+      ({ text: full, stalled } = await attempt());
     }
     if (!full || !full.trim()) {
-      send('llm:error', { message: 'The model returned an empty response twice in a row (it may have declined to answer, or hit its output limit). Try again.' });
+      send('llm:error', { message: `The model gave no response twice in a row (empty completion, or no reply after ${IDLE_TIMEOUT_MS / 1000}s each time) — check your network or API key access and try again.` });
     } else {
       if (mode === 'leetcode') {
         send('status', { message: 'Verifying the solution runs correctly…' });
-        const verified = await verifyAndRepair(llm, full);
+        const verified = await verifyAndRepair(llm, full, images);
         if (verified.text) {
           full = verified.text;
           send('llm:start', { userBubble, small: !!def.small });
@@ -330,6 +340,7 @@ async function runFeature(mode, userText, presetImages) {
         }
         if (verified.note) send('status', { message: verified.note });
       }
+      if (stalled) send('status', { message: 'Connection stalled after the answer came through — showing what was received.' });
       send('llm:done', {});
     }
   } catch (e) { 
@@ -420,7 +431,8 @@ function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+H', () => addScreenshotToBatch());
   globalShortcut.register('CommandOrControl+Down', () => send('overlay:scroll', { direction: 'down' }));
   globalShortcut.register('CommandOrControl+Up', () => send('overlay:scroll', { direction: 'up' }));
-  globalShortcut.register('CommandOrControl+Shift+X', () => app.quit()); 
+  globalShortcut.register('CommandOrControl+Shift+X', () => app.quit());
+  globalShortcut.register('CommandOrControl+K', () => { if (win) { win.show(); win.focus(); } send('overlay:focus-input', {}); });
 } 
 
 // -------- lifecycle -------- 

@@ -237,6 +237,7 @@
     if (active) { startMic(); startSystemAudio(); } else { stopMic(); stopSystemAudio(); }
   });
   shadow.on('overlay:scroll', ({ direction }) => scrollOverlay(direction));
+  shadow.on('overlay:focus-input', () => input.focus());
   shadow.on('llm:start', ({ userBubble, small }) => {
     clearMessages();
     if (userBubble) addUserBubble(userBubble);

@@ -6,14 +6,14 @@ const { app } = require('electron');
 const FILE = path.join(app.getPath('userData'), 'shadow-data.json');
 
 const DEFAULTS = {
-  provider: 'openai',
-  smart: false,
+  provider: 'anthropic',
+  smart: true,
   windowPosition: 'top-center',
   apiKeys: { openai: '', anthropic: '', gemini: '' },
   models: {
     openai: { fast: 'gpt-4o-mini', smart: 'gpt-4o' },
-    anthropic: { fast: 'claude-sonnet-5', smart: 'claude-sonnet-5' },
-    gemini: { fast: 'gemini-3.5-pro', smart: 'gemini-3.5-pro' }
+    anthropic: { fast: 'claude-sonnet-5', smart: 'claude-opus-5' },
+    gemini: { fast: 'gemini-2.5-flash', smart: 'gemini-2.5-pro' }
   }
 };
 
