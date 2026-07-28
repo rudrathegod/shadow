@@ -78,6 +78,15 @@ async function streamGemini({ apiKey, model, system, turns, imageDataUrls, maxTo
   return full;
 }
 
+function isRateLimited(err) {
+  const status = err && (err.status || err.statusCode || (err.error && err.error.code));
+  if (status === 429) return true;
+  return /429|too many requests|rate.?limit/i.test((err && err.message) || '');
+}
+
+const RATE_LIMIT_RETRIES = 3;
+const RATE_LIMIT_BASE_MS = 2000; // 2s, 4s, 8s
+
 function createLLM(settings) {
   const provider = settings.provider;
   const keys = settings.apiKeys || {};
@@ -92,11 +101,29 @@ function createLLM(settings) {
     provider, model, apiKey,
     ready: !!apiKey && !!model,
     async stream(params) {
-      const args = { apiKey, model, maxTokens, ...params };
-      if (provider === 'openai') return streamOpenAI(args);
-      if (provider === 'anthropic') return streamAnthropic(args);
-      if (provider === 'gemini') return streamGemini(args);
-      throw new Error('unknown provider: ' + provider);
+      const runOnce = () => {
+        // Track whether this attempt emitted any tokens before failing — once
+        // a provider starts streaming, retrying from scratch would duplicate
+        // text already shown, so only 429s caught before any token is unsafe to retry.
+        let gotToken = false;
+        const args = { apiKey, model, maxTokens, ...params, onToken: (t) => { gotToken = true; params.onToken(t); } };
+        const run = provider === 'openai' ? streamOpenAI
+          : provider === 'anthropic' ? streamAnthropic
+          : provider === 'gemini' ? streamGemini
+          : null;
+        if (!run) throw new Error('unknown provider: ' + provider);
+        return run(args).catch((err) => { err.gotToken = gotToken; throw err; });
+      };
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await runOnce();
+        } catch (err) {
+          if (err.gotToken || !isRateLimited(err) || attempt >= RATE_LIMIT_RETRIES) throw err;
+          const waitMs = RATE_LIMIT_BASE_MS * Math.pow(2, attempt);
+          if (params.onRateLimit) params.onRateLimit(attempt + 1, waitMs);
+          await new Promise((r) => setTimeout(r, waitMs));
+        }
+      }
     }
   };
 }

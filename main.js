@@ -305,7 +305,8 @@ async function runFeature(mode, userText, presetImages) {
         system: def.system,
         turns: [{ role: 'user', text: built }],
         imageDataUrls: images,
-        onToken: (t) => { acc += t; send('llm:token', { text: t }); resetIdle(); }
+        onToken: (t) => { acc += t; send('llm:token', { text: t }); resetIdle(); },
+        onRateLimit: (attempt, waitMs) => send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` })
       }).then((full) => ({ timedOut: false, full }));
       try {
         const result = await Promise.race([streamed, timedOut]);
