@@ -330,7 +330,7 @@ async function runFeature(mode, userText, presetImages) {
     if (!full || !full.trim()) {
       send('llm:error', { message: `The model gave no response twice in a row (empty completion, or no reply after ${IDLE_TIMEOUT_MS / 1000}s each time) — check your network or API key access and try again.` });
     } else {
-      if (mode === 'leetcode') {
+      if (mode === 'leetcode' || mode === 'assist' || mode === 'ask') {
         send('status', { message: 'Verifying the solution runs correctly…' });
         const verified = await verifyAndRepair(llm, full, images);
         if (verified.text) {

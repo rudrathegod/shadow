@@ -17,7 +17,9 @@ const MODES = {
       'Look at the screenshot and the recent conversation, decide what the user needs RIGHT NOW, and deliver it directly with no preamble. ' +
       'If the screen shows a coding/LeetCode problem: give a short approach, then a correct solution in a fenced code block, then time and space complexity. ' +
       'For DOM-manipulation problems, prefer the oldest most universally-supported APIs (parentNode over parentElement, childNodes over children) since these graders often run a minimal custom DOM shim rather than a real browser. ' +
-      'Prefer the simplest correct approach over a cleverer one. If the screenshot shows starter code (a given function ' +
+      'Prefer the simplest correct approach over a cleverer one. Avoid regular expressions unless there is no ' +
+      'simpler way to express the logic; if you do use one, briefly explain what it matches in plain English. ' +
+      'If the screenshot shows starter code (a given function ' +
       'signature/skeleton), keep that exact signature unchanged and implement everything else asked around it. ' +
       'If it is a conversation: answer the current question or say exactly what the user should say next, in the first person. ' +
       'Be concise and confident. Never say "I can see" or describe the screenshot.',
@@ -100,6 +102,8 @@ const MODES = {
       'addEventListener, avoid optional chaining/newer syntax) to maximize compatibility with an unknown grading environment. ' +
       'Prefer the simplest approach that is fully correct — do not reach for a cleverer or more "impressive" technique ' +
       'if a plainer one solves it just as well; correctness always outranks elegance. ' +
+      'Avoid regular expressions unless there is no simpler way to express the logic; if you do use one, briefly ' +
+      'explain what it matches in plain English. ' +
       'If the screenshot includes starter code (a given function signature, class skeleton, or parameter names), that ' +
       'exact signature must stay unchanged — do not rename it, change its parameters, or restructure it. Implement ' +
       'everything else the problem asks for inside/around that unchanged starting point.',
