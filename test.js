@@ -121,10 +121,10 @@ assert.strictEqual(stripFences('  bare text  '), 'bare text');
   assert.strictEqual(rms16(loud), 1000);
 }
 
-// --- keybind panel (renderer, driven in jsdom) -----------------------------
-// The accelerator conversion is the kind of branchy mapping that breaks quietly:
-// a wrong key name just produces a shortcut that never fires.
-async function testKeybinds() {
+// --- renderer tests (driven in jsdom) --------------------------------------
+// Boots the real renderer against the real index.html, with the preload API
+// stubbed. `state` exposes what the renderer sent back out.
+function bootRenderer() {
   const fs = require('fs');
   const path = require('path');
   const { JSDOM } = require('jsdom');
@@ -134,7 +134,7 @@ async function testKeybinds() {
   const { window } = dom;
   const defaults = require('./src/store').defaultShortcuts();
   const actions = Object.keys(defaults).map((id) => ({ id, label: id }));
-  let saved = null, captured = [];
+  const state = { saved: null, captured: [], handlers: {}, defaults, actions };
   const noop = () => {};
   window.shadow = {
     platform: 'darwin',
@@ -144,15 +144,61 @@ async function testKeybinds() {
     }),
     settingsSet: async () => ({}), captureState: async () => ({ active: false }),
     shortcutsGet: async () => ({ actions, shortcuts: { ...defaults }, defaults: { ...defaults } }),
-    shortcutsSet: async (n) => { saved = { ...n }; return { shortcuts: { ...n }, failed: [] }; },
-    shortcutsCapture: async (on) => { captured.push(on); return true; },
+    shortcutsSet: async (n) => { state.saved = { ...n }; return { shortcuts: { ...n }, failed: [] }; },
+    shortcutsCapture: async (on) => { state.captured.push(on); return true; },
     windowSetPosition: async () => ({}), checkUpdate: async () => ({}), installUpdate: async () => ({}),
-    setIgnoreMouse: noop, log: noop, on: noop, ask: noop, captureToggle: async () => {},
-    quitApp: noop, openPane: noop, micPcm: noop, systemPcm: noop
+    setIgnoreMouse: noop, log: noop, ask: noop, captureToggle: async () => {},
+    quitApp: noop, openPane: noop, micPcm: noop, systemPcm: noop, panic: noop,
+    on: (ch, cb) => { state.handlers[ch] = cb; }
   };
   window.eval(fs.readFileSync(path.join(ROOT, 'renderer/icons.js'), 'utf8'));
   window.eval(fs.readFileSync(path.join(ROOT, 'renderer/renderer.js'), 'utf8'));
-  const tick = () => new Promise((r) => setTimeout(r, 30));
+  return { window, state, tick: () => new Promise((r) => setTimeout(r, 30)) };
+}
+
+// --- answer rendering ------------------------------------------------------
+// The math branch of `assist` returns numbered working, which used to be joined
+// into one run-on paragraph because only bullets were handled.
+async function testMarkdown() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  const render = async (text) => {
+    state.handlers['llm:start']({ userBubble: null, small: false });
+    state.handlers['llm:token']({ text });
+    state.handlers['llm:done']({});
+    await tick();
+    return window.document.querySelector('.ai-text').innerHTML;
+  };
+
+  const steps = await render('1. Let u = 3x^2 + 1.\n2. dy/du = 5u^4.\n3. du/dx = 6x.');
+  assert.ok(/<ol>(<li>.*?<\/li>){3}<\/ol>/.test(steps), 'numbered steps become one <ol>: ' + steps);
+  assert.ok(!/<p>1\./.test(steps), 'steps are not collapsed into a paragraph');
+
+  // ")" is as common as "." for step markers.
+  assert.ok(/<ol><li>first<\/li><li>second<\/li><\/ol>/.test(await render('1) first\n2) second')));
+
+  // Bullets must still work, and switching list type must close the previous one.
+  const bullets = await render('- alpha\n- beta');
+  assert.ok(/<ul><li>alpha<\/li><li>beta<\/li><\/ul>/.test(bullets), bullets);
+  const mixed = await render('- bullet\n1. step');
+  assert.ok(/<ul><li>bullet<\/li><\/ul><ol><li>step<\/li><\/ol>/.test(mixed), 'ul closes before ol: ' + mixed);
+
+  // Plain-text math must survive escaping untouched — no LaTeX renderer exists.
+  const math = await render('Answer: ∫ x^2 dx = x^3/3 + C, lim(x->a) & d/dx');
+  assert.ok(math.includes('∫ x^2 dx = x^3/3 + C'), 'unicode and carets pass through: ' + math);
+  assert.ok(math.includes('lim(x-&gt;a) &amp; d/dx'), 'angle bracket and ampersand escaped: ' + math);
+
+  // A fence still closes an open list and stays verbatim.
+  const fenced = await render('1. run this\n```\nx < 1 && y\n```');
+  assert.ok(/<\/ol><pre><code>x &lt; 1 &amp;&amp; y/.test(fenced), 'list closes before code: ' + fenced);
+  window.close();
+}
+
+// The accelerator conversion is the kind of branchy mapping that breaks quietly:
+// a wrong key name just produces a shortcut that never fires.
+async function testKeybinds() {
+  const { window, state, tick } = bootRenderer();
+  const defaults = state.defaults, actions = state.actions;
   const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   const press = (init) => window.document.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, ...init }));
   const keyBtn = (id) => window.document.querySelector(`.s-key-btn[data-id="${id}"]`);
@@ -177,10 +223,10 @@ async function testKeybinds() {
 
   click(keyBtn('solve'));
   await tick();
-  assert.strictEqual(captured[0], true, 'globals released while recording');
+  assert.strictEqual(state.captured[0], true, 'globals released while recording');
   press({ key: 'j', code: 'KeyJ', ctrlKey: true, shiftKey: true });
   await tick();
-  assert.strictEqual(saved.solve, 'CommandOrControl+Shift+J');
+  assert.strictEqual(state.saved.solve, 'CommandOrControl+Shift+J');
   assert.strictEqual(keyBtn('solve').textContent, '⌘⇧J');
 
   // A bare key would swallow that character system-wide — must be refused.
@@ -192,16 +238,17 @@ async function testKeybinds() {
 
   press({ key: 'Backspace', code: 'Backspace' });
   await tick();
-  assert.strictEqual(saved.assist, '', 'Backspace unbinds');
+  assert.strictEqual(state.saved.assist, '', 'Backspace unbinds');
 
   click(window.document.querySelector('#keys-reset'));
   await tick();
-  assert.deepStrictEqual(saved, defaults, 'reset restores every default');
+  assert.deepStrictEqual(state.saved, defaults, 'reset restores every default');
   window.close();
 }
 
 // --- runSandboxed ----------------------------------------------------------
 (async () => {
+  await testMarkdown();
   await testKeybinds();
 
   assert.deepStrictEqual(await runSandboxed('rust', 'fn main(){}'), { supported: false });

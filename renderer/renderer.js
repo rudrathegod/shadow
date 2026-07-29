@@ -33,10 +33,15 @@
 
   function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
-  // minimal, safe markdown: fenced code, bullets, inline code, bold, paragraphs
+  // minimal, safe markdown: fenced code, bullets, numbered steps, inline code,
+  // bold, paragraphs. No math rendering — answers use plain-text notation
+  // (d/dx, ∫, x^2), which needs no special handling beyond escaping.
+  const BULLET = /^\s*[-*]\s+/;
+  const NUMBERED = /^\s*\d+[.)]\s+/;
   function renderMarkdown(text) {
     const lines = text.split('\n');
-    let html = '', inCode = false, inList = false, buf = [];
+    let html = '', inCode = false, listTag = null, buf = [];
+    const closeList = () => { if (listTag) { html += '</' + listTag + '>'; listTag = null; } };
     const flushP = () => { if (buf.length) { html += '<p>' + inline(buf.join(' ')) + '</p>'; buf = []; } };
     const inline = (s) => esc(s)
       .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -44,16 +49,25 @@
     for (const raw of lines) {
       const line = raw;
       if (/^```/.test(line.trim())) {
-        if (!inCode) { flushP(); if (inList) { html += '</ul>'; inList = false; } html += '<pre><code>'; inCode = true; }
+        if (!inCode) { flushP(); closeList(); html += '<pre><code>'; inCode = true; }
         else { html += '</code></pre>'; inCode = false; }
         continue;
       }
       if (inCode) { html += esc(line) + '\n'; continue; }
-      if (/^\s*[-*]\s+/.test(line)) { flushP(); if (!inList) { html += '<ul>'; inList = true; } html += '<li>' + inline(line.replace(/^\s*[-*]\s+/, '')) + '</li>'; continue; }
-      if (line.trim() === '') { flushP(); if (inList) { html += '</ul>'; inList = false; } continue; }
+      // Numbered steps were previously joined into one run-on paragraph, which
+      // made any step-by-step working unreadable.
+      const marker = BULLET.test(line) ? BULLET : (NUMBERED.test(line) ? NUMBERED : null);
+      if (marker) {
+        const tag = marker === BULLET ? 'ul' : 'ol';
+        flushP();
+        if (listTag !== tag) { closeList(); html += '<' + tag + '>'; listTag = tag; }
+        html += '<li>' + inline(line.replace(marker, '')) + '</li>';
+        continue;
+      }
+      if (line.trim() === '') { flushP(); closeList(); continue; }
       buf.push(line.trim());
     }
-    flushP(); if (inList) html += '</ul>'; if (inCode) html += '</code></pre>';
+    flushP(); closeList(); if (inCode) html += '</code></pre>';
     return html;
   }
 

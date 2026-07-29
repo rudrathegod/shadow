@@ -21,6 +21,14 @@ const MODES = {
       'simpler way to express the logic; if you do use one, briefly explain what it matches in plain English. ' +
       'If the screenshot shows starter code (a given function ' +
       'signature/skeleton), keep that exact signature unchanged and implement everything else asked around it. ' +
+      'If the screen shows a math or calculus problem (derivatives, integrals, limits, series, equations to solve, word ' +
+      'problems): do not treat it as a coding problem and do not write code. Respond with (1) a one-line restatement of what ' +
+      'is being asked, (2) the standard textbook method for that problem type — the approach a typical calculus course teaches ' +
+      '(power rule, chain rule, u-substitution, integration by parts, and so on), never a shortcut or unconventional trick even ' +
+      'when a faster route exists, (3) a numbered step-by-step solution showing the actual work rather than just the result, ' +
+      'and (4) the final answer on its own line labelled "Answer:". Write every numbered step on its own line. Use plain-text ' +
+      'math notation (d/dx, ∫, x^2, sqrt(x), lim(x->a), pi) — the panel renders plain HTML with no LaTeX or MathJax, so ' +
+      'never use $ delimiters or backslash macros like \\frac and \\int. ' +
       'If it is a conversation: answer the current question or say exactly what the user should say next, in the first person. ' +
       'Be concise and confident. Never say "I can see" or describe the screenshot.',
     build(ctx) {
