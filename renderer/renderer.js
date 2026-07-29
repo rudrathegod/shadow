@@ -316,7 +316,13 @@
     if (updateZip) {
       btn.textContent = 'Installing… shadow will restart';
       btn.disabled = true;
-      await shadow.installUpdate(updateZip);
+      // Only macOS swaps the bundle in place; elsewhere this just opens the
+      // download, so don't leave the button stuck on "Installing…".
+      const res = await shadow.installUpdate(updateZip);
+      if (!res || !res.ok) {
+        btn.textContent = 'Download opened in your browser — unzip and replace shadow';
+        btn.disabled = false;
+      }
       return;
     }
     btn.textContent = 'Checking…';

@@ -406,7 +406,10 @@ ipcMain.handle('app:checkUpdate', async () => {
   const res = await fetch('https://api.github.com/repos/rudrathegod/shadow/releases/latest');
   const rel = await res.json();
   const latest = (rel.tag_name || '').replace(/^v/, '');
-  const asset = (rel.assets || []).find((a) => a.name === 'shadow-mac.zip');
+  // The release carries both zips — picking the mac one unconditionally left
+  // Windows with no zipUrl, which the renderer reads as "Up to date" forever.
+  const assetName = process.platform === 'win32' ? 'shadow-win.zip' : 'shadow-mac.zip';
+  const asset = (rel.assets || []).find((a) => a.name === assetName);
   return { current: app.getVersion(), latest, url: rel.html_url, zipUrl: asset && asset.browser_download_url };
 });
 
