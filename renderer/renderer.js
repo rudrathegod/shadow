@@ -17,6 +17,8 @@
     const kc = document.querySelectorAll('#placeholder .keycap')[0];
     if (kc) kc.textContent = 'Ctrl';
   }
+  $('#panic-btn').innerHTML = icon('eye-off', { size: 15 });
+  $('#panic-btn').addEventListener('click', () => shadow.panic());
   $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
   $('#send-btn').innerHTML = icon('play', { size: 15 });
 
@@ -541,7 +543,7 @@
     {
       icon: '✨',
       title: 'You’re all set',
-      body: `How to use shadow:<ul><li><span class="kbd">${mod}</span> <span class="kbd">↵</span> — <strong>Assist</strong> with whatever's on screen or being said</li><li><span class="kbd">${mod}</span> <span class="kbd">H</span> — solve a coding problem on screen</li><li><span class="kbd">${mod}</span> <span class="kbd">${shiftKey}</span> <span class="kbd">H</span> — add another screenshot before solving (for problems that need scrolling)</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with <span class="kbd">${mod}</span><span class="kbd">${shiftKey}</span><span class="kbd">X</span>.`
+      body: `How to use shadow:<ul><li><span class="kbd">${mod}</span> <span class="kbd">\\</span> — <strong>Panic</strong>: hide shadow instantly if someone walks over. Press again to bring it back.</li><li><span class="kbd">${mod}</span> <span class="kbd">↵</span> — <strong>Assist</strong> with whatever's on screen or being said</li><li><span class="kbd">${mod}</span> <span class="kbd">H</span> — solve a coding problem on screen</li><li><span class="kbd">${mod}</span> <span class="kbd">${shiftKey}</span> <span class="kbd">H</span> — add another screenshot before solving (for problems that need scrolling)</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with <span class="kbd">${mod}</span><span class="kbd">${shiftKey}</span><span class="kbd">X</span>.`
     }
   ];
   let obIndex = 0;
@@ -575,6 +577,13 @@
     smartBtn.classList.toggle('on', !!settings.smart);
     showExample();
     syncPlaceholder();
+    // The bring-back key has to be discoverable BEFORE it's needed — once the
+    // overlay is hidden there's no UI left to explain it.
+    const keys = await shadow.shortcutsGet();
+    const back = keys.shortcuts.panic || keys.defaults.panic;
+    $('#panic-btn').title = back
+      ? 'Panic — hide shadow (' + prettyAccel(back) + ' brings it back)'
+      : 'Panic — hide shadow (set a shortcut in Settings › Keys to bring it back)';
     const st = await shadow.captureState();
     $('#live-dot').classList.toggle('off', !st.active);
     $('#stop-btn').classList.toggle('active', st.active);

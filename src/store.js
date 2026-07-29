@@ -9,6 +9,7 @@ const file = () => path.join(app.getPath('userData'), 'shadow-data.json');
 
 // Electron accelerator strings. An empty value means intentionally unbound.
 const DEFAULT_SHORTCUTS = {
+  panic: 'CommandOrControl+\\',
   assist: 'CommandOrControl+Return',
   solve: 'CommandOrControl+H',
   addShot: 'CommandOrControl+Shift+H',

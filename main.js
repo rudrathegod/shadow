@@ -520,7 +520,10 @@ ipcMain.handle('window:setPosition', (_e, preset) => {
   setWindowPosition(preset); 
   return saved; 
 }); 
-ipcMain.on('app:quit', () => app.quit()); 
+// Button can only hide — once hidden there's nothing to click, so coming back
+// is the global shortcut's job.
+ipcMain.on('window:panic', () => setPanic(true));
+ipcMain.on('app:quit', () => app.quit());
 ipcMain.handle('capture:toggle', () => setCapturing(!state.capturing)); 
 ipcMain.handle('capture:state', () => ({ active: state.capturing })); 
 ipcMain.on('ask', (_e, payload) => runFeature(payload.mode, payload.text)); 
@@ -538,9 +541,29 @@ ipcMain.on('open-pane', (_e, url) => {
 }); 
 ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg)); 
 
+// -------- panic: hide the whole overlay, and bring it back --------
+// win.hide() rather than collapsing the panel — someone standing behind you
+// should see nothing at all, not a smaller version of it. Capture keeps running
+// so a meeting in progress isn't interrupted.
+function setPanic(hidden) {
+  if (!win || win.isDestroyed()) return false;
+  if (hidden) {
+    win.hide();
+  } else {
+    win.showInactive(); // never steal focus from whatever they're actually doing
+    // hide() can drop these on some window managers; re-assert so it comes back
+    // on top and still excluded from screen shares.
+    win.setAlwaysOnTop(true, 'screen-saver', 1);
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+  return hidden;
+}
+function togglePanic() { return setPanic(!!win && win.isVisible()); }
+
 // -------- shortcuts --------
 // Order here is the order shown in Settings.
 const SHORTCUT_ACTIONS = {
+  panic: { label: 'Panic — hide / bring back', run: () => togglePanic() },
   assist: { label: 'Assist', run: () => runFeature('assist', '') },
   solve: { label: 'Solve what\'s on screen', run: () => captureAndSolve() },
   addShot: { label: 'Add screenshot to batch', run: () => addScreenshotToBatch() },

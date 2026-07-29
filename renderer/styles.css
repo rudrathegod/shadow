@@ -80,6 +80,8 @@ html, body {
 .tb-stop { width: 28px; height: 28px; border-radius: var(--r-8); color: #fff; }
 .tb-stop:hover { background: rgba(255,255,255,0.08); }
 .tb-stop.active { color: #ff6b6b; }
+.tb-panic { width: 28px; height: 28px; border-radius: var(--r-8); color: rgba(255,255,255,0.75); }
+.tb-panic:hover { background: rgba(239,68,68,0.18); color: #f87171; }
 
 /* ============================ Panel ============================ */
 #panel-wrap { position: relative; margin-top: 12px; width: min(624px, 94vw); }

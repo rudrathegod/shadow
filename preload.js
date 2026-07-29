@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('shadow', {
   shortcutsGet: () => ipcRenderer.invoke('shortcuts:get'),
   shortcutsSet: (next) => ipcRenderer.invoke('shortcuts:set', next),
   shortcutsCapture: (on) => ipcRenderer.invoke('shortcuts:capture', on),
+  panic: () => ipcRenderer.send('window:panic'),
   quitApp: () => ipcRenderer.send('app:quit'),
   ask: (payload) => ipcRenderer.send('ask', payload),
   captureToggle: () => ipcRenderer.invoke('capture:toggle'),
