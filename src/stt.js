@@ -12,11 +12,11 @@ async function transcribeOpenAI(apiKey, wav) {
   return (res.text || '').trim();
 }
 
-async function transcribeGemini(apiKey, wav) {
+async function transcribeGemini(apiKey, model, wav) {
   const { GoogleGenAI } = require('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
   const res = await ai.models.generateContent({
-    model: 'gemini-1.5-flash',
+    model,
     contents: [{ role: 'user', parts: [
       { text: 'Transcribe this audio verbatim. Return only the spoken words with no commentary. If there is no clear speech, return an empty response.' },
       { inlineData: { mimeType: 'audio/wav', data: wav.toString('base64') } }
@@ -27,9 +27,13 @@ async function transcribeGemini(apiKey, wav) {
 
 function createSTT(settings) {
   const keys = settings.apiKeys || {};
+  // Take the Gemini id from settings rather than hardcoding a second one here —
+  // a pinned id rots independently of the store defaults (that's how this path
+  // kept calling the long-retired gemini-1.5-flash after the defaults moved on).
+  const geminiModel = ((settings.models || {}).gemini || {}).fast || 'gemini-flash-latest';
   const chain = [];
   if (keys.openai) chain.push({ p: 'openai', fn: (wav) => transcribeOpenAI(keys.openai, wav) });
-  if (keys.gemini) chain.push({ p: 'gemini', fn: (wav) => transcribeGemini(keys.gemini, wav) });
+  if (keys.gemini) chain.push({ p: 'gemini', fn: (wav) => transcribeGemini(keys.gemini, geminiModel, wav) });
 
   return {
     available: chain.length > 0,

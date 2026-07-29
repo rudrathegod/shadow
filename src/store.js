@@ -3,7 +3,9 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
-const FILE = path.join(app.getPath('userData'), 'shadow-data.json');
+// Resolved lazily so this module can be required (and its pure helpers tested)
+// outside a running Electron app.
+const file = () => path.join(app.getPath('userData'), 'shadow-data.json');
 
 const DEFAULTS = {
   provider: 'anthropic',
@@ -17,11 +19,30 @@ const DEFAULTS = {
   }
 };
 
+// Model ids the provider has retired. A saved value beats DEFAULTS in the merge
+// below, so anyone who opened Settings before the defaults moved on keeps 404ing
+// forever — on the chat path and the transcription path both. Drop them on load
+// so a defaults bump actually reaches existing installs.
+const RETIRED_MODELS = new Set([
+  'gemini-1.5-flash', 'gemini-1.5-pro',
+  'gemini-2.5-flash', 'gemini-2.5-pro'
+]);
+
+function dropRetiredModels(d) {
+  for (const [provider, tiers] of Object.entries(d.models || {})) {
+    for (const tier of Object.keys(tiers || {})) {
+      if (RETIRED_MODELS.has(tiers[tier])) tiers[tier] = (DEFAULTS.models[provider] || {})[tier] || '';
+    }
+  }
+  return d;
+}
+
 let data = null;
 
 function deepMerge(base, over) {
   const out = Array.isArray(base) ? base.slice() : { ...base };
   for (const k of Object.keys(over || {})) {
+    if (k === '__proto__' || k === 'constructor') continue; // JSON.parse makes these own keys
     if (over[k] && typeof over[k] === 'object' && !Array.isArray(over[k]) && typeof base[k] === 'object') {
       out[k] = deepMerge(base[k], over[k]);
     } else {
@@ -33,13 +54,18 @@ function deepMerge(base, over) {
 
 function load() {
   if (data) return data;
-  try { data = deepMerge(DEFAULTS, JSON.parse(fs.readFileSync(FILE, 'utf8'))); }
+  try { data = deepMerge(DEFAULTS, JSON.parse(fs.readFileSync(file(), 'utf8'))); }
   catch { data = deepMerge(DEFAULTS, {}); }
+  dropRetiredModels(data);
   return data;
 }
-function save() { try { fs.writeFileSync(FILE, JSON.stringify(data, null, 2)); } catch (e) { /* ignore */ } }
+function save() { try { fs.writeFileSync(file(), JSON.stringify(data, null, 2)); } catch (e) { /* ignore */ } }
 
 module.exports = {
   getSettings() { return load(); },
-  setSettings(patch) { load(); data = deepMerge(data, patch || {}); save(); return data; }
+  setSettings(patch) { load(); data = deepMerge(data, patch || {}); save(); return data; },
+  // exported for test.js
+  _deepMerge: deepMerge,
+  _dropRetiredModels: dropRetiredModels,
+  _DEFAULTS: DEFAULTS
 };

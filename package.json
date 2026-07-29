@@ -1,6 +1,6 @@
 {
   "name": "shadow",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Open-source macOS invisible AI overlay — three separate inputs (screen, mic, system audio) into an LLM. A Cluely-style copilot for meetings and coding problems.",
   "license": "UNLICENSED",
   "author": "shadow",
@@ -11,6 +11,7 @@
   "scripts": {
     "postinstall": "sh scripts/sign-dev-electron.sh",
     "start": "electron .",
+    "test": "node test.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --mac",
     "dist:win": "electron-builder --win"

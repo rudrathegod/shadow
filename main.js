@@ -16,7 +16,9 @@ let win = null;
 
 // -------- capture / transcript state -------- 
 const state = { capturing: false, busy: false, transcribing: { you: false, them: false } }; 
-let sttDisabled = false; // set when the key can't reach any speech model (stops retry spam) 
+let sttDisabled = false; // set when the key can't reach any speech model (stops retry spam)
+let sttFailures = 0; // consecutive transient failures; resets on any success
+const STT_MAX_FAILURES = 3;
 const buffers = { you: [], them: [] }; 
 const transcript = []; // { channel, text, ts } 
 const FLUSH_MS = 3500; 
@@ -125,13 +127,14 @@ async function flushChannel(channel) {
       return; 
     } 
 
-    const res = await stt.transcribe(pcm); 
-    if (res.error) { 
-      handleSttError(res.error, settings); 
-      return; 
-    } 
+    const res = await stt.transcribe(pcm);
+    if (res.error) {
+      handleSttError(res.error);
+      return;
+    }
 
-    if (res.text && res.text.trim()) { 
+    sttFailures = 0;
+    if (res.text && res.text.trim()) {
       const turn = { channel, text: res.text.trim(), ts: Date.now() }; 
       transcript.push(turn); 
       send('transcript', turn); 
@@ -143,17 +146,29 @@ async function flushChannel(channel) {
   } 
 } 
 
-function handleSttError(err, settings) { 
-  console.log('[stt] error', err.provider, err.status, err.code, err.message); 
-  if (sttDisabled) return; 
-  const noAccess = err.status === 403 || err.status === 401 || err.code === 'model_not_found'; 
-  sttDisabled = true; // stop hammering the API every few seconds 
-  if (noAccess) { 
-    send('status', { message: 'Transcription off: your ' + err.provider + ' key has no access to a speech-to-text model (403). Screen + LeetCode still work. To enable listening: give the key Whisper/transcription access, or add a Gemini key in Settings and reopen.' }); 
-  } else { 
-    send('status', { message: 'Transcription error (' + err.provider + '): ' + err.message }); 
-  } 
-} 
+function handleSttError(err) {
+  console.log('[stt] error', err.provider, err.status, err.code, err.message);
+  if (sttDisabled) return;
+
+  // A key that can't reach a speech model will never start working on its own —
+  // disable immediately rather than retrying every few seconds forever.
+  if (err.status === 403 || err.status === 401 || err.code === 'model_not_found') {
+    sttDisabled = true;
+    send('status', { message: 'Transcription off: your ' + err.provider + ' key has no access to a speech-to-text model (403). Screen + LeetCode still work. To enable listening: give the key Whisper/transcription access, or add a Gemini key in Settings and reopen.' });
+    return;
+  }
+
+  // Anything else (429, 5xx, dropped connection) is usually transient, so keep
+  // trying — but give up after a few in a row so a real outage doesn't hammer
+  // the API every FLUSH_MS for the rest of the session.
+  sttFailures++;
+  if (sttFailures >= STT_MAX_FAILURES) {
+    sttDisabled = true;
+    send('status', { message: 'Transcription off after ' + STT_MAX_FAILURES + ' errors in a row (' + err.provider + '): ' + err.message + ' — change any setting to re-enable.' });
+  } else {
+    send('status', { message: 'Transcription error (' + err.provider + '): ' + err.message + ' — retrying.' });
+  }
+}
 
 function startFlushLoop() { 
   if (flushTimer) return; 
@@ -207,7 +222,9 @@ async function captureOneScreenshot() {
 // -------- self-check: run the model's own code against its own test harness --------
 async function verifyAndRepair(llm, answerText, images) {
   const extracted = extractCode(answerText);
-  if (!extracted || !extracted.lang) return {};
+  // Empty code also has to bail: there's nothing to test, and an empty needle
+  // would make the repair splice below match at index 0 and prepend.
+  if (!extracted || !extracted.lang || !extracted.code.trim()) return {};
   const lang = extracted.lang;
   const silent = (system, userText, imageDataUrls) =>
     llm.stream({ system, turns: [{ role: 'user', text: userText }], imageDataUrls, onToken: () => {} }).catch(() => '');
@@ -239,7 +256,12 @@ async function verifyAndRepair(llm, answerText, images) {
 
   const retry = await runSandboxed(lang, fixed.code + '\n\n' + harness);
   if (retry.ok) {
-    const newText = answerText.replace(/```[\s\S]*?```/, '```' + lang + '\n' + fixed.code + '\n```');
+    // Swap the exact substring extractCode matched. A ```-to-``` regex can land
+    // on a different span than the one that was tested (any earlier inline
+    // triple-backtick run wins), and a string replacement would eat $&/$'/$`
+    // sequences in the code — either way the shown answer silently stops
+    // matching the one that passed.
+    const newText = answerText.replace(extracted.code, () => fixed.code);
     return { text: newText, note: 'Found and fixed a bug during self-test.' };
   }
   return { note: `Self-test still failing after one fix attempt: ${retry.error} — double check before using.` };
@@ -247,7 +269,14 @@ async function verifyAndRepair(llm, answerText, images) {
 
 // -------- Cmd+H batching: ⌘⇧H adds a screenshot without solving, ⌘H solves using all of them --------
 let pendingShots = [];
+// ⌘⇧H is a global shortcut and each shot is a multi-MB data URL, so an
+// accidental key-repeat would otherwise build a request no provider will accept.
+const MAX_BATCH = 6;
 async function addScreenshotToBatch() {
+  if (pendingShots.length >= MAX_BATCH) {
+    send('status', { message: `Batch is full (${MAX_BATCH} screenshots) — press ⌘H to solve using them.` });
+    return;
+  }
   const img = await captureOneScreenshot();
   if (!img) return;
   pendingShots.push(img);
@@ -257,8 +286,15 @@ async function captureAndSolve() {
   if (state.busy) return;
   const img = await captureOneScreenshot();
   const images = pendingShots.concat(img ? [img] : []);
-  pendingShots = [];
   if (!images.length) return; // capture failed; status already shown
+  // Re-check: the capture above is slow enough that another request can start
+  // during it, and runFeature would silently drop this one — taking the whole
+  // batch with it if we'd already cleared it.
+  if (state.busy) {
+    send('status', { message: 'Still answering the previous request — your screenshots are kept, press ⌘H again in a moment.' });
+    return;
+  }
+  pendingShots = [];
   runFeature('leetcode', '', images);
 }
 
@@ -296,6 +332,11 @@ async function runFeature(mode, userText, presetImages) {
     const IDLE_TIMEOUT_MS = 45000;
     async function attempt() {
       let acc = '';
+      // Losing the race doesn't cancel the underlying stream — it can wake up
+      // later and keep firing onToken. Without this flag those stale tokens get
+      // sent to the renderer long after we moved on, interleaving themselves
+      // into the retry's bubble or into the post-verify rewrite.
+      let abandoned = false;
       let resetIdle, idleTimer;
       const timedOut = new Promise((resolve) => {
         idleTimer = setTimeout(() => resolve({ timedOut: true }), IDLE_TIMEOUT_MS);
@@ -305,12 +346,17 @@ async function runFeature(mode, userText, presetImages) {
         system: def.system,
         turns: [{ role: 'user', text: built }],
         imageDataUrls: images,
-        onToken: (t) => { acc += t; send('llm:token', { text: t }); resetIdle(); },
+        onToken: (t) => { if (abandoned) return; acc += t; send('llm:token', { text: t }); resetIdle(); },
         onRateLimit: (attempt, waitMs) => send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` })
       }).then((full) => ({ timedOut: false, full }));
+      // Once the race is settled nothing is awaiting `streamed`, so a late
+      // failure would surface as an unhandled rejection. Swallow it here; this
+      // extra handler doesn't affect the race below.
+      streamed.catch(() => {});
       try {
         const result = await Promise.race([streamed, timedOut]);
         if (!result.timedOut) return { text: result.full, stalled: false };
+        abandoned = true;
         // A true hang with zero tokens is treated the same as an empty completion
         // below — one silent retry — instead of surfacing an error on what's
         // often just one bad connection.
@@ -398,10 +444,11 @@ open "${currentApp}"
   return { ok: true };
 });
 ipcMain.handle('settings:get', () => store.getSettings());
-ipcMain.handle('settings:set', (_e, patch) => { 
-  sttDisabled = false; 
-  return store.setSettings(patch); 
-}); 
+ipcMain.handle('settings:set', (_e, patch) => {
+  sttDisabled = false;
+  sttFailures = 0;
+  return store.setSettings(patch);
+});
 ipcMain.handle('window:setPosition', (_e, preset) => { 
   const saved = store.setSettings({ windowPosition: preset }); 
   setWindowPosition(preset); 

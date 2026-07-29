@@ -185,17 +185,24 @@
   }
 
   // ---- capture: mic (renderer side) --------------------------------------
-  let micStream = null, micTap = null;
+  let micStream = null, micTap = null, micWanted = false;
   async function startMic() {
+    micWanted = true;
     if (micStream) return;
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+      // Capture can be toggled off while the permission prompt / device open is
+      // still pending. Without this the tap gets built after stopMic() already
+      // ran and the mic stays live with the indicator showing off.
+      if (!micWanted) { stream.getTracks().forEach((t) => t.stop()); return; }
+      micStream = stream;
       micTap = makeAudioTap(micStream, (buf) => shadow.micPcm(buf));
     } catch (err) {
       shadow.log('mic error: ' + (err && err.message));
     }
   }
   function stopMic() {
+    micWanted = false;
     if (micTap) { micTap.stop(); micTap = null; }
     micStream = null;
   }
