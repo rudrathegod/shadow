@@ -452,7 +452,22 @@ ipcMain.handle('settings:set', (_e, patch) => {
   sttFailures = 0;
   return store.setSettings(patch);
 });
-ipcMain.handle('window:setPosition', (_e, preset) => { 
+ipcMain.handle('shortcuts:get', () => ({
+  actions: Object.entries(SHORTCUT_ACTIONS).map(([id, d]) => ({ id, label: d.label })),
+  shortcuts: store.getSettings().shortcuts || {},
+  defaults: store.defaultShortcuts()
+}));
+ipcMain.handle('shortcuts:set', (_e, next) => {
+  const saved = store.setSettings({ shortcuts: next || {} });
+  return { shortcuts: saved.shortcuts, failed: registerShortcuts() };
+});
+// Global shortcuts outrank the focused window, so ⌘H would fire "solve" instead
+// of being recorded. Release them while the user is picking new keys.
+ipcMain.handle('shortcuts:capture', (_e, on) => {
+  if (on) globalShortcut.unregisterAll(); else registerShortcuts();
+  return true;
+});
+ipcMain.handle('window:setPosition', (_e, preset) => {
   const saved = store.setSettings({ windowPosition: preset }); 
   setWindowPosition(preset); 
   return saved; 
@@ -475,16 +490,34 @@ ipcMain.on('open-pane', (_e, url) => {
 }); 
 ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg)); 
 
-// -------- shortcuts -------- 
-function registerShortcuts() { 
-  globalShortcut.register('CommandOrControl+Return', () => runFeature('assist', '')); 
-  globalShortcut.register('CommandOrControl+H', () => captureAndSolve());
-  globalShortcut.register('CommandOrControl+Shift+H', () => addScreenshotToBatch());
-  globalShortcut.register('CommandOrControl+Down', () => send('overlay:scroll', { direction: 'down' }));
-  globalShortcut.register('CommandOrControl+Up', () => send('overlay:scroll', { direction: 'up' }));
-  globalShortcut.register('CommandOrControl+Shift+X', () => app.quit());
-  globalShortcut.register('CommandOrControl+K', () => { if (win) { win.show(); win.focus(); } send('overlay:focus-input', {}); });
-} 
+// -------- shortcuts --------
+// Order here is the order shown in Settings.
+const SHORTCUT_ACTIONS = {
+  assist: { label: 'Assist', run: () => runFeature('assist', '') },
+  solve: { label: 'Solve what\'s on screen', run: () => captureAndSolve() },
+  addShot: { label: 'Add screenshot to batch', run: () => addScreenshotToBatch() },
+  scrollDown: { label: 'Scroll answer down', run: () => send('overlay:scroll', { direction: 'down' }) },
+  scrollUp: { label: 'Scroll answer up', run: () => send('overlay:scroll', { direction: 'up' }) },
+  focusInput: { label: 'Focus the input box', run: () => { if (win) { win.show(); win.focus(); } send('overlay:focus-input', {}); } },
+  quit: { label: 'Quit shadow', run: () => app.quit() }
+};
+
+// Returns the bindings that couldn't be claimed — an accelerator already taken
+// by another app (or by another row here) silently does nothing otherwise, which
+// looks identical to a broken feature.
+function registerShortcuts() {
+  globalShortcut.unregisterAll();
+  const saved = store.getSettings().shortcuts || {};
+  const failed = [];
+  for (const [id, def] of Object.entries(SHORTCUT_ACTIONS)) {
+    const accel = saved[id];
+    if (!accel) continue; // blank = deliberately unbound
+    let ok = false;
+    try { ok = globalShortcut.register(accel, def.run); } catch { ok = false; }
+    if (!ok) failed.push({ id, label: def.label, accel });
+  }
+  return failed;
+}
 
 // -------- lifecycle -------- 
 // Execute platform-specific UI management cleanly before internal ready hooks trigger

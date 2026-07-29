@@ -275,8 +275,13 @@
 
   // ---- settings ----------------------------------------------------------
   const scrim = $('#settings-scrim');
-  function openSettings() { fillSettings(); scrim.classList.remove('hidden'); }
-  function closeSettings() { saveSettings(); scrim.classList.add('hidden'); }
+  function openSettings() { fillSettings(); loadKeys(); scrim.classList.remove('hidden'); }
+  function closeSettings() {
+    // Closing mid-recording would otherwise leave every global shortcut released.
+    if (recordingId) stopRecording(false);
+    saveSettings();
+    scrim.classList.add('hidden');
+  }
   $('#more-btn').addEventListener('click', openSettings);
   $('#s-close').addEventListener('click', closeSettings);
   scrim.addEventListener('click', (e) => { if (e.target === scrim) closeSettings(); });
@@ -307,6 +312,113 @@
     settings.windowPosition = b.dataset.pos;
     await shadow.windowSetPosition(b.dataset.pos);
   }));
+
+  // ---- settings: keybinds ---------------------------------------------------
+  // Electron wants accelerator strings ('CommandOrControl+Shift+H'); the user
+  // presses keys. These two convert between that and something readable.
+  const KEY_ALIASES = { Enter: 'Return', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', ' ': 'Space', Backspace: 'Backspace', Delete: 'Delete', Tab: 'Tab' };
+  function accelKey(e) {
+    if (['Control', 'Meta', 'Alt', 'Shift'].includes(e.key)) return null;
+    if (KEY_ALIASES[e.key]) return KEY_ALIASES[e.key];
+    if (/^F\d{1,2}$/.test(e.key)) return e.key;
+    // e.code so the printed key doesn't shift under Shift/Alt (⌥H must not become '˙').
+    if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
+    if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
+    return e.key.length === 1 ? e.key.toUpperCase() : null;
+  }
+  function prettyAccel(accel) {
+    if (!accel) return 'Not set';
+    const mac = shadow.platform === 'darwin';
+    return accel.split('+').map((p) => {
+      if (p === 'CommandOrControl') return mac ? '⌘' : 'Ctrl';
+      if (p === 'Shift') return mac ? '⇧' : 'Shift';
+      if (p === 'Alt') return mac ? '⌥' : 'Alt';
+      if (p === 'Return') return '↵';
+      if (p === 'Up') return '↑';
+      if (p === 'Down') return '↓';
+      return p;
+    }).join(mac ? '' : '+');
+  }
+
+  let keyActions = [], keyBinds = {}, keyFailed = [], recordingId = null;
+
+  function renderKeys() {
+    const list = $('#keys-list');
+    list.innerHTML = '';
+    keyActions.forEach((a) => {
+      const row = document.createElement('div');
+      row.className = 's-key-row';
+      const name = document.createElement('span');
+      name.textContent = a.label;
+      const btn = document.createElement('button');
+      btn.className = 's-key-btn';
+      btn.dataset.id = a.id;
+      if (recordingId === a.id) {
+        btn.textContent = 'Press keys…';
+        btn.classList.add('recording');
+      } else {
+        btn.textContent = prettyAccel(keyBinds[a.id]);
+        if (!keyBinds[a.id]) btn.classList.add('unbound');
+        if (keyFailed.some((f) => f.id === a.id)) btn.classList.add('conflict');
+      }
+      btn.addEventListener('click', () => startRecording(a.id));
+      row.appendChild(name); row.appendChild(btn);
+      list.appendChild(row);
+    });
+    const conflicts = keyFailed.map((f) => prettyAccel(f.accel)).join(', ');
+    $('#keys-status').textContent = recordingId
+      ? 'Press a combination with ⌘/Ctrl, Alt or Shift. Backspace clears it, Esc cancels.'
+      : (conflicts ? 'In use by another app or duplicated here: ' + conflicts : 'Changes apply immediately.');
+  }
+
+  async function startRecording(id) {
+    recordingId = id;
+    await shadow.shortcutsCapture(true); // release globals so we can see the keys
+    renderKeys();
+  }
+  async function commitKeys() {
+    const res = await shadow.shortcutsSet(keyBinds);
+    keyBinds = res.shortcuts; keyFailed = res.failed || [];
+    // closeSettings() writes the whole `settings` object back, so the copy read
+    // at boot has to be refreshed or it would overwrite what we just saved.
+    settings.shortcuts = res.shortcuts;
+    renderKeys();
+  }
+  async function stopRecording(save) {
+    recordingId = null;
+    if (save) await commitKeys();
+    else { await shadow.shortcutsCapture(false); renderKeys(); }
+  }
+
+  // Capture phase so a recording press never reaches the app's own handlers.
+  document.addEventListener('keydown', (e) => {
+    if (!recordingId) return;
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === 'Escape') { stopRecording(false); return; }
+    if (e.key === 'Backspace') { keyBinds[recordingId] = ''; stopRecording(true); return; }
+    const key = accelKey(e);
+    if (!key) return; // modifier alone — keep waiting
+    const mods = [];
+    if (e.metaKey || e.ctrlKey) mods.push('CommandOrControl');
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    // A global shortcut with no modifier would swallow that key everywhere.
+    if (!mods.length) { $('#keys-status').textContent = 'Needs at least one modifier (⌘/Ctrl, Alt or Shift).'; return; }
+    keyBinds[recordingId] = mods.concat(key).join('+');
+    stopRecording(true);
+  }, true);
+
+  async function loadKeys() {
+    const res = await shadow.shortcutsGet();
+    keyActions = res.actions;
+    keyBinds = { ...res.defaults, ...res.shortcuts };
+    renderKeys();
+  }
+  $('#keys-reset').addEventListener('click', async () => {
+    const res = await shadow.shortcutsGet();
+    keyBinds = { ...res.defaults };
+    await commitKeys();
+  });
 
   // ---- quit ------------------------------------------------------------
   $('#quit-btn').addEventListener('click', () => shadow.quitApp());

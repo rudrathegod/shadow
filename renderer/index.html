@@ -61,6 +61,7 @@
       <div class="s-tabs" id="s-tabs">
         <button class="s-tab on" data-tab="general">General</button>
         <button class="s-tab" data-tab="position">Position</button>
+        <button class="s-tab" data-tab="keys">Keys</button>
         <button class="s-tab" data-tab="about">About</button>
       </div>
 
@@ -95,6 +96,13 @@
           <button data-pos="bottom-center" title="Bottom center"></button>
           <button data-pos="bottom-right" title="Bottom right"></button>
         </div>
+      </div>
+
+      <div class="s-body s-panel hidden" id="s-panel-keys">
+        <label class="s-label">Shortcuts <span class="s-hint">click one, then press the new keys</span></label>
+        <div id="keys-list"></div>
+        <div class="s-status" id="keys-status"></div>
+        <button id="keys-reset" class="s-quit">Reset to defaults</button>
       </div>
 
       <div class="s-body s-panel hidden" id="s-panel-about">

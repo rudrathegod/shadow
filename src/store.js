@@ -7,10 +7,22 @@ const { app } = require('electron');
 // outside a running Electron app.
 const file = () => path.join(app.getPath('userData'), 'shadow-data.json');
 
+// Electron accelerator strings. An empty value means intentionally unbound.
+const DEFAULT_SHORTCUTS = {
+  assist: 'CommandOrControl+Return',
+  solve: 'CommandOrControl+H',
+  addShot: 'CommandOrControl+Shift+H',
+  scrollDown: 'CommandOrControl+Down',
+  scrollUp: 'CommandOrControl+Up',
+  focusInput: 'CommandOrControl+K',
+  quit: 'CommandOrControl+Shift+X'
+};
+
 const DEFAULTS = {
   provider: 'anthropic',
   smart: true,
   windowPosition: 'top-center',
+  shortcuts: { ...DEFAULT_SHORTCUTS },
   apiKeys: { openai: '', anthropic: '', gemini: '' },
   models: {
     openai: { fast: 'gpt-4o-mini', smart: 'gpt-4o' },
@@ -28,10 +40,15 @@ const RETIRED_MODELS = new Set([
   'gemini-2.5-flash', 'gemini-2.5-pro'
 ]);
 
+// The whole Claude 3.x family (claude-3-*, which covers 3-5 and 3-7) is
+// superseded. A prefix test rather than an exact-id list, so dated variants
+// like claude-3-5-haiku-20241022 are caught without maintaining every suffix.
+const isRetiredModel = (id) => RETIRED_MODELS.has(id) || /^claude-3[-.]/.test(id || '');
+
 function dropRetiredModels(d) {
   for (const [provider, tiers] of Object.entries(d.models || {})) {
     for (const tier of Object.keys(tiers || {})) {
-      if (RETIRED_MODELS.has(tiers[tier])) tiers[tier] = (DEFAULTS.models[provider] || {})[tier] || '';
+      if (isRetiredModel(tiers[tier])) tiers[tier] = (DEFAULTS.models[provider] || {})[tier] || '';
     }
   }
   return d;
@@ -64,6 +81,7 @@ function save() { try { fs.writeFileSync(file(), JSON.stringify(data, null, 2));
 module.exports = {
   getSettings() { return load(); },
   setSettings(patch) { load(); data = deepMerge(data, patch || {}); save(); return data; },
+  defaultShortcuts() { return { ...DEFAULT_SHORTCUTS }; },
   // exported for test.js
   _deepMerge: deepMerge,
   _dropRetiredModels: dropRetiredModels,
