@@ -131,7 +131,11 @@ async function flushChannel(channel) {
     if (!stt.available) { 
       if (!sttDisabled) { 
         sttDisabled = true; 
-        send('status', { message: 'No transcription key set. Add an OpenAI (Whisper) or Gemini key in Settings to enable listening. Screen/LeetCode features work without it.' }); 
+        send('status', {
+          message: stt.wanted === 'auto'
+            ? 'No transcription key set. Add an OpenAI (Whisper) or Gemini key in Settings to enable listening. Screen/LeetCode features work without it.'
+            : 'Transcription is set to ' + stt.wanted + ', but no ' + stt.wanted + ' key is set. Add one in Settings, or switch transcription to Auto.'
+        });
       } 
       return; 
     } 

@@ -62,6 +62,30 @@ assert.strictEqual(stripFences('  bare text  '), 'bare text');
   assert.strictEqual({}.polluted, undefined, 'deepMerge drops __proto__');
 }
 
+// --- STT provider selection ------------------------------------------------
+// Transcription picks its provider independently of solving/chat, because
+// Anthropic has no speech API. 'auto' keeps the historic Whisper-then-Gemini
+// fallback; an explicit choice must NOT quietly fall back to the other one.
+{
+  const { createSTT } = require('./src/stt');
+  const make = (apiKeys, sttProvider) =>
+    createSTT({ apiKeys, sttProvider, models: { gemini: { fast: 'gemini-flash-latest' } } });
+  const both = { openai: 'o', gemini: 'g' };
+
+  assert.deepStrictEqual(make(both, 'auto').providers, ['openai', 'gemini'], 'auto prefers Whisper');
+  assert.deepStrictEqual(make({ gemini: 'g' }, 'auto').providers, ['gemini'], 'auto falls back');
+  assert.deepStrictEqual(make(both, 'openai').providers, ['openai'], 'explicit openai only');
+  assert.deepStrictEqual(make(both, 'gemini').providers, ['gemini'], 'explicit gemini only');
+  // Existing installs have no sttProvider saved at all.
+  assert.deepStrictEqual(make(both, undefined).providers, ['openai', 'gemini'], 'undefined behaves as auto');
+  // Choosing a provider whose key is missing must report unavailable rather
+  // than silently transcribing with the other one.
+  assert.strictEqual(make({ gemini: 'g' }, 'openai').available, false);
+  assert.strictEqual(make({ openai: 'o' }, 'gemini').available, false);
+  assert.strictEqual(make({}, 'auto').available, false);
+  assert.strictEqual(make({ gemini: 'g' }, 'openai').wanted, 'openai', 'caller can name the missing key');
+}
+
 // --- rate-limit detection --------------------------------------------------
 // Shared by the chat retry loop and the STT cooldown, and the two paths hand it
 // different error shapes: the Gemini SDK throws an Error whose message embeds
@@ -136,6 +160,17 @@ async function testKeybinds() {
 
   click(window.document.querySelector('#more-btn'));
   await tick();
+
+  // The transcription selector defaults to Auto when nothing is saved.
+  const sttOn = [...window.document.querySelectorAll('#stt-seg button')].filter((b) => b.classList.contains('on'));
+  assert.strictEqual(sttOn.length, 1, 'exactly one transcription provider selected');
+  assert.strictEqual(sttOn[0].dataset.stt, 'auto');
+  click(window.document.querySelector('#stt-seg button[data-stt="gemini"]'));
+  await tick();
+  assert.strictEqual(window.document.querySelector('#stt-seg button[data-stt="gemini"]').classList.contains('on'), true);
+  assert.strictEqual(window.document.querySelector('#stt-seg button[data-stt="auto"]').classList.contains('on'), false,
+    'selecting one deselects the others');
+
   assert.strictEqual(window.document.querySelectorAll('#keys-list .s-key-row').length, actions.length,
     'one row per action');
   assert.strictEqual(keyBtn('solve').textContent, '⌘H', 'mac glyphs for the default binding');

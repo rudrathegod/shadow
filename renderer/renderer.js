@@ -290,6 +290,7 @@
 
   function fillSettings() {
     document.querySelectorAll('#provider-seg button').forEach((b) => b.classList.toggle('on', b.dataset.provider === settings.provider));
+    document.querySelectorAll('#stt-seg button').forEach((b) => b.classList.toggle('on', b.dataset.stt === (settings.sttProvider || 'auto')));
     $('#key-openai').value = settings.apiKeys.openai || '';
     $('#key-anthropic').value = settings.apiKeys.anthropic || '';
     $('#key-gemini').value = settings.apiKeys.gemini || '';
@@ -455,14 +456,23 @@
   function statusText() {
     const k = settings.apiKeys;
     const has = [k.openai && 'OpenAI', k.anthropic && 'Anthropic', k.gemini && 'Gemini'].filter(Boolean);
-    const stt = k.openai ? 'Whisper' : (k.gemini ? 'Gemini' : 'none');
-    return 'Active: ' + settings.provider + ' · keys: ' + (has.join(', ') || 'none set') + ' · transcription: ' + stt;
+    // Mirror createSTT's resolution so this never claims a provider that has no key.
+    const want = settings.sttProvider || 'auto';
+    const stt = want === 'auto'
+      ? (k.openai ? 'Whisper' : (k.gemini ? 'Gemini' : 'none'))
+      : (k[want] ? (want === 'openai' ? 'Whisper' : 'Gemini') : want + ' (no key)');
+    return 'Solving: ' + settings.provider + ' · transcription: ' + stt + ' · keys: ' + (has.join(', ') || 'none set');
   }
   function syncCurrentModelFields() {
     if (!settings.models[settings.provider]) settings.models[settings.provider] = {};
     settings.models[settings.provider].fast = $('#model-fast').value.trim();
     settings.models[settings.provider].smart = $('#model-smart').value.trim();
   }
+  document.querySelectorAll('#stt-seg button').forEach((b) => b.addEventListener('click', () => {
+    settings.sttProvider = b.dataset.stt;
+    document.querySelectorAll('#stt-seg button').forEach((x) => x.classList.toggle('on', x === b));
+    $('#s-status').textContent = statusText();
+  }));
   document.querySelectorAll('#provider-seg button').forEach((b) => b.addEventListener('click', () => {
     syncCurrentModelFields();
     settings.provider = b.dataset.provider;

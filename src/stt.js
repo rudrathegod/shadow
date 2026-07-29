@@ -31,13 +31,20 @@ function createSTT(settings) {
   // a pinned id rots independently of the store defaults (that's how this path
   // kept calling the long-retired gemini-1.5-flash after the defaults moved on).
   const geminiModel = ((settings.models || {}).gemini || {}).fast || 'gemini-flash-latest';
-  const chain = [];
-  if (keys.openai) chain.push({ p: 'openai', fn: (wav) => transcribeOpenAI(keys.openai, wav) });
-  if (keys.gemini) chain.push({ p: 'gemini', fn: (wav) => transcribeGemini(keys.gemini, geminiModel, wav) });
+  // 'auto' keeps the original behaviour: prefer Whisper, fall back to Gemini.
+  // An explicit choice is honoured exactly — no silent fallback to the provider
+  // the user just deselected.
+  const want = settings.sttProvider || 'auto';
+  const chain = [
+    { p: 'openai', key: keys.openai, fn: (wav) => transcribeOpenAI(keys.openai, wav) },
+    { p: 'gemini', key: keys.gemini, fn: (wav) => transcribeGemini(keys.gemini, geminiModel, wav) }
+  ].filter((c) => c.key && (want === 'auto' || want === c.p));
 
   return {
     available: chain.length > 0,
     providers: chain.map((c) => c.p),
+    // Lets the caller say *which* key is missing instead of listing both.
+    wanted: want,
     async transcribe(pcm) {
       if (!chain.length || !pcm || pcm.length < 3200) return { text: '' };
       const wav = pcmToWav(pcm, 16000, 1);

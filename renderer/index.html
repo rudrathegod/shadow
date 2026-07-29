@@ -68,11 +68,18 @@
       </div>
 
       <div class="s-body s-panel" id="s-panel-general">
-        <label class="s-label">Provider</label>
+        <label class="s-label">Solving &amp; chat <span class="s-hint">screenshots, Assist, questions</span></label>
         <div class="s-seg" id="provider-seg">
           <button data-provider="openai">OpenAI</button>
           <button data-provider="anthropic">Anthropic</button>
           <button data-provider="gemini">Gemini</button>
+        </div>
+
+        <label class="s-label">Transcription <span class="s-hint">Anthropic has no speech API</span></label>
+        <div class="s-seg" id="stt-seg">
+          <button data-stt="auto">Auto</button>
+          <button data-stt="openai">OpenAI</button>
+          <button data-stt="gemini">Gemini</button>
         </div>
 
         <label class="s-label">API keys <span class="s-hint">stored locally in shadow-data.json</span></label>
