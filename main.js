@@ -402,7 +402,9 @@ async function runFeature(mode, userText, presetImages) {
 ipcMain.handle('app:getVersion', () => app.getVersion());
 ipcMain.handle('app:checkUpdate', async () => {
   // ponytail: no code-signing cert -> no silent Squirrel auto-update; this checks
-  // GitHub releases and, on mac, installs on click via a swap-and-relaunch script.
+  // GitHub releases and installs on click via a swap-and-relaunch script (mac
+  // and Windows). Unsigned means Windows still shows a SmartScreen warning on
+  // the relaunched exe — that needs a cert, not more code here.
   const res = await fetch('https://api.github.com/repos/rudrathegod/shadow/releases/latest');
   const rel = await res.json();
   const latest = (rel.tag_name || '').replace(/^v/, '');
@@ -414,7 +416,9 @@ ipcMain.handle('app:checkUpdate', async () => {
 });
 
 ipcMain.handle('app:installUpdate', async (_e, zipUrl) => {
-  if (process.platform !== 'darwin' || !app.isPackaged) {
+  const isMac = process.platform === 'darwin';
+  const isWin = process.platform === 'win32';
+  if ((!isMac && !isWin) || !app.isPackaged) {
     shell.openExternal(zipUrl);
     return { ok: false };
   }
@@ -423,18 +427,22 @@ ipcMain.handle('app:installUpdate', async (_e, zipUrl) => {
   const { execFileSync, spawn } = require('child_process');
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shadow-update-'));
-  const zipPath = path.join(tmp, 'shadow-mac.zip');
+  const zipPath = path.join(tmp, isWin ? 'shadow-win.zip' : 'shadow-mac.zip');
   const res = await fetch(zipUrl);
   fs.writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
-  execFileSync('unzip', ['-o', zipPath, '-d', tmp]);
 
-  const newApp = path.join(tmp, 'shadow.app');
-  const currentApp = path.resolve(process.resourcesPath, '..', '..'); // .../shadow.app
+  // Both platforms do the same dance: unpack to temp, then hand a script to a
+  // detached process that waits for this one to exit before swapping. Neither
+  // OS lets you replace the files of a running app in place.
+  if (isMac) {
+    execFileSync('unzip', ['-o', zipPath, '-d', tmp]);
+    const newApp = path.join(tmp, 'shadow.app');
+    const currentApp = path.resolve(process.resourcesPath, '..', '..'); // .../shadow.app
 
-  // Swap after this process exits: remove old bundle, move new one in, clear
-  // quarantine (same as after-sign.js does at build time), relaunch.
-  const script = path.join(tmp, 'apply-update.sh');
-  fs.writeFileSync(script, `#!/bin/bash
+    // Swap after this process exits: remove old bundle, move new one in, clear
+    // quarantine (same as after-sign.js does at build time), relaunch.
+    const script = path.join(tmp, 'apply-update.sh');
+    fs.writeFileSync(script, `#!/bin/bash
 while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done
 rm -rf "${currentApp}"
 mv "${newApp}" "${currentApp}"
@@ -442,7 +450,47 @@ xattr -cr "${currentApp}"
 open "${currentApp}"
 `, { mode: 0o755 });
 
-  spawn('/bin/bash', [script], { detached: true, stdio: 'ignore' }).unref();
+    spawn('/bin/bash', [script], { detached: true, stdio: 'ignore', cwd: tmp }).unref();
+  } else {
+    // The Windows zip holds the app files at its root (no wrapper folder), so
+    // the extracted directory *is* the new install directory.
+    const newDir = path.join(tmp, 'new');
+    const ps = (p) => `'${String(p).replace(/'/g, "''")}'`; // PowerShell literal
+    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `Expand-Archive -LiteralPath ${ps(zipPath)} -DestinationPath ${ps(newDir)} -Force`]);
+
+    // resourcesPath/../.. is the .app on mac but lands a directory too high on
+    // Windows — the install dir is simply where the exe lives.
+    const currentDir = path.dirname(app.getPath('exe'));
+
+    // Rename-then-move rather than delete-then-copy, so a failed swap can roll
+    // back instead of leaving the user with no app at all.
+    const script = path.join(tmp, 'apply-update.ps1');
+    fs.writeFileSync(script, `$ErrorActionPreference = 'Stop'
+$current = ${ps(currentDir)}
+$new = ${ps(newDir)}
+$backup = $current + '.old'
+
+while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 200 }
+
+if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
+Move-Item -LiteralPath $current -Destination $backup
+try {
+  Move-Item -LiteralPath $new -Destination $current
+} catch {
+  Move-Item -LiteralPath $backup -Destination $current
+  throw
+}
+Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
+Start-Process -FilePath (Join-Path $current 'shadow.exe')
+`);
+
+    // cwd must be outside the install dir, or the swap can't move it.
+    spawn('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', script],
+      { detached: true, stdio: 'ignore', cwd: tmp }).unref();
+  }
+
   app.quit();
   return { ok: true };
 });
