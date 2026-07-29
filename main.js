@@ -3,7 +3,7 @@ const path = require('path');
 const store = require('./src/store'); 
 const { captureScreenshot } = require('./src/screen'); 
 const { createSTT } = require('./src/stt'); 
-const { createLLM } = require('./src/llm'); 
+const { createLLM, isRateLimited } = require('./src/llm');
 const { MODES } = require('./src/prompts');
 const { rms16 } = require('./src/wav');
 const { extractCode, stripFences, runSandboxed } = require('./src/verify');
@@ -19,6 +19,11 @@ const state = { capturing: false, busy: false, transcribing: { you: false, them:
 let sttDisabled = false; // set when the key can't reach any speech model (stops retry spam)
 let sttFailures = 0; // consecutive transient failures; resets on any success
 const STT_MAX_FAILURES = 3;
+// A 429 means "come back later", not "you're broken". Retrying every FLUSH_MS
+// just deepens the hole and burns the same quota the chat calls need, so back
+// off for a whole quota window instead.
+let sttCooldownUntil = 0;
+const STT_COOLDOWN_MS = 60000;
 const buffers = { you: [], them: [] }; 
 const transcript = []; // { channel, text, ts } 
 const FLUSH_MS = 3500; 
@@ -109,10 +114,14 @@ async function flushChannel(channel) {
   const chunks = buffers[channel]; 
   if (!chunks.length) return; 
 
-  const pcm = Buffer.concat(chunks); 
-  buffers[channel] = []; 
+  const pcm = Buffer.concat(chunks);
+  buffers[channel] = [];
 
-  if (pcm.length < MIN_BYTES) return; 
+  // Drain first, then bail — audio recorded during a cooldown is discarded
+  // rather than piling up for a burst of catch-up requests afterwards.
+  if (Date.now() < sttCooldownUntil) return;
+
+  if (pcm.length < MIN_BYTES) return;
   if (rms16(pcm) < RMS_GATE) return; // silence gate 
 
   state.transcribing[channel] = true; 
@@ -158,7 +167,16 @@ function handleSttError(err) {
     return;
   }
 
-  // Anything else (429, 5xx, dropped connection) is usually transient, so keep
+  // Rate limiting is self-inflicted at FLUSH_MS: two channels transcribing every
+  // 3.5s is ~17-34 requests/min against a free tier that allows far fewer. Pause
+  // rather than counting it as a failure — nothing is wrong, there's just no room.
+  if (isRateLimited(err)) {
+    sttCooldownUntil = Date.now() + STT_COOLDOWN_MS;
+    send('status', { message: 'Transcription paused ' + (STT_COOLDOWN_MS / 1000) + 's — ' + err.provider + ' is rate-limiting. It resumes on its own.' });
+    return;
+  }
+
+  // Anything else (5xx, dropped connection) is usually transient, so keep
   // trying — but give up after a few in a row so a real outage doesn't hammer
   // the API every FLUSH_MS for the rest of the session.
   sttFailures++;
@@ -330,6 +348,9 @@ async function runFeature(mode, userText, presetImages) {
     // complete-looking answer sitting in `acc`, so surface that instead of
     // discarding it behind a hard error.
     const IDLE_TIMEOUT_MS = 45000;
+    // Set when any attempt had to back off, so we don't follow a rate-limited
+    // answer with two more optional calls.
+    let hitRateLimit = false;
     async function attempt() {
       let acc = '';
       // Losing the race doesn't cancel the underlying stream — it can wake up
@@ -347,7 +368,7 @@ async function runFeature(mode, userText, presetImages) {
         turns: [{ role: 'user', text: built }],
         imageDataUrls: images,
         onToken: (t) => { if (abandoned) return; acc += t; send('llm:token', { text: t }); resetIdle(); },
-        onRateLimit: (attempt, waitMs) => send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` })
+        onRateLimit: (attempt, waitMs) => { hitRateLimit = true; send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` }); }
       }).then((full) => ({ timedOut: false, full }));
       // Once the race is settled nothing is awaiting `streamed`, so a late
       // failure would surface as an unhandled rejection. Swallow it here; this
@@ -377,7 +398,12 @@ async function runFeature(mode, userText, presetImages) {
     if (!full || !full.trim()) {
       send('llm:error', { message: `The model gave no response twice in a row (empty completion, or no reply after ${IDLE_TIMEOUT_MS / 1000}s each time) — check your network or API key access and try again.` });
     } else {
-      if (mode === 'leetcode') {
+      // The self-test costs two more calls (harness, then repair). That's the
+      // difference between one request per ⌘H and three — worth skipping when
+      // the provider is already refusing us.
+      if (mode === 'leetcode' && hitRateLimit) {
+        send('status', { message: 'Skipped the self-test — the API is rate-limiting. Double-check the solution.' });
+      } else if (mode === 'leetcode') {
         send('status', { message: 'Verifying the solution runs correctly…' });
         const verified = await verifyAndRepair(llm, full, images);
         if (verified.text) {
@@ -498,6 +524,7 @@ ipcMain.handle('settings:get', () => store.getSettings());
 ipcMain.handle('settings:set', (_e, patch) => {
   sttDisabled = false;
   sttFailures = 0;
+  sttCooldownUntil = 0; // switching provider/key should retry immediately
   return store.setSettings(patch);
 });
 ipcMain.handle('shortcuts:get', () => ({

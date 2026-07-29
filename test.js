@@ -62,6 +62,23 @@ assert.strictEqual(stripFences('  bare text  '), 'bare text');
   assert.strictEqual({}.polluted, undefined, 'deepMerge drops __proto__');
 }
 
+// --- rate-limit detection --------------------------------------------------
+// Shared by the chat retry loop and the STT cooldown, and the two paths hand it
+// different error shapes: the Gemini SDK throws an Error whose message embeds
+// the status, while stt.js builds a plain {status, code, message, provider}.
+{
+  const { isRateLimited } = require('./src/llm');
+  const geminiSdkError = new Error(
+    'got status: 429 Too Many Requests. {"error":{"message":"exception parsing response","code":429,"status":"Too Many Requests"}}');
+  assert.ok(isRateLimited(geminiSdkError), 'message-embedded 429');
+  assert.ok(isRateLimited({ status: 429, message: 'x' }), 'stt error shape');
+  assert.ok(isRateLimited({ error: { code: 429 }, message: 'x' }), 'nested code');
+  assert.ok(isRateLimited({ message: 'Rate limit exceeded' }), 'wording only');
+  assert.ok(!isRateLimited({ status: 500, message: 'server error' }), '500 is not a rate limit');
+  assert.ok(!isRateLimited({ status: 403, message: 'forbidden' }), '403 must stay a hard failure');
+  assert.ok(!isRateLimited(null) && !isRateLimited(undefined), 'null-safe');
+}
+
 // --- wav -------------------------------------------------------------------
 {
   const pcm = Buffer.alloc(8); // 4 samples of silence

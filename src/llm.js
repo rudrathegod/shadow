@@ -84,8 +84,10 @@ function isRateLimited(err) {
   return /429|too many requests|rate.?limit/i.test((err && err.message) || '');
 }
 
-const RATE_LIMIT_RETRIES = 3;
-const RATE_LIMIT_BASE_MS = 2000; // 2s, 4s, 8s
+// 2s, 4s, 8s, 16s — ~30s total, so a per-minute quota window has a chance to
+// reset. Three tries (14s) routinely expired before free-tier limits recovered.
+const RATE_LIMIT_RETRIES = 4;
+const RATE_LIMIT_BASE_MS = 2000;
 
 function createLLM(settings) {
   const provider = settings.provider;
@@ -128,4 +130,6 @@ function createLLM(settings) {
   };
 }
 
-module.exports = { createLLM };
+// Exported so the STT path detects a 429 the same way rather than keeping its
+// own copy of the rules.
+module.exports = { createLLM, isRateLimited };
