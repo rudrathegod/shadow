@@ -5,4 +5,8 @@ native/systemaudio
 *.log
 .DS_Store
 shadow-data.json
-.claude/
+# Local Claude Code state stays out, but the shared subagent definitions are
+# part of the repo. Must be `.claude/*`, not `.claude/` — git can't re-include
+# anything inside a directory that is itself excluded.
+.claude/*
+!.claude/agents/
