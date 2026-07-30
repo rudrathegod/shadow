@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('shadow', {
   panic: () => ipcRenderer.send('window:panic'),
   quitApp: () => ipcRenderer.send('app:quit'),
   ask: (payload) => ipcRenderer.send('ask', payload),
+  cancelAsk: () => ipcRenderer.invoke('ask:cancel'),
   captureToggle: () => ipcRenderer.invoke('capture:toggle'),
   captureState: () => ipcRenderer.invoke('capture:state'),
   micPcm: (arrayBuffer) => ipcRenderer.send('mic:pcm', arrayBuffer),

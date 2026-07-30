@@ -21,6 +21,10 @@
   $('#panic-btn').addEventListener('click', () => shadow.panic());
   $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
   $('#send-btn').innerHTML = icon('play', { size: 15 });
+  $('#copy-answer').innerHTML = icon('copy', { size: 15 });
+  $('#regenerate-answer').innerHTML = icon('refresh-cw', { size: 15 });
+  $('#stop-answer').innerHTML = icon('stop-square', { size: 14 });
+  $('#clear-answer').innerHTML = icon('trash', { size: 15 });
 
   // ---- state -------------------------------------------------------------
   let settings = null;
@@ -28,6 +32,8 @@
   let busy = false;
   let aiEl = null;       // current streaming <div class="ai-text">
   let caretEl = null;
+  let lastAnswerText = '';
+  let lastRequest = null;
 
   const messages = $('#messages');
 
@@ -71,7 +77,7 @@
     return html;
   }
 
-  function clearMessages() { messages.innerHTML = ''; aiEl = null; caretEl = null; }
+  function clearMessages() { messages.innerHTML = ''; aiEl = null; caretEl = null; lastAnswerText = ''; }
 
   function addUserBubble(text) {
     const b = document.createElement('div');
@@ -102,16 +108,35 @@
   function finalizeAi() {
     if (!aiEl) return;
     const raw = aiEl.dataset.raw || '';
+    lastAnswerText = raw;
     aiEl.innerHTML = renderMarkdown(raw);
     aiEl = null; caretEl = null;
   }
 
   function setBusy(v) { busy = v; $('#send-btn').classList.toggle('busy', v); }
+  function setRequestState(text, state) {
+    const el = $('#request-state');
+    el.textContent = text || '';
+    el.dataset.state = state || '';
+    $('#answer-tools').classList.toggle('visible', !!text || !!lastAnswerText);
+  }
+  function setToolbarStatus(text, state) {
+    $('#toolbar-status-text').textContent = text;
+    $('#toolbar-status').dataset.state = state;
+  }
+  function showAnswerToolStatus(text) {
+    const el = $('#answer-tool-status');
+    el.textContent = text;
+    clearTimeout(showAnswerToolStatus.timer);
+    showAnswerToolStatus.timer = setTimeout(() => { el.textContent = ''; }, 1800);
+  }
 
   // ---- actions -----------------------------------------------------------
   function runMode(mode, text) {
     if (busy) return;
     setBusy(true);
+    lastRequest = { mode, text: text || '' };
+    setRequestState('Working', 'working');
     shadow.ask({ mode, text: text || '' });
   }
 
@@ -140,6 +165,28 @@
     runMode('ask', text);
   }
   $('#send-btn').addEventListener('click', send);
+  $('#copy-answer').addEventListener('click', async () => {
+    if (!lastAnswerText) return;
+    try {
+      await navigator.clipboard.writeText(lastAnswerText);
+      showAnswerToolStatus('Copied');
+    } catch { showAnswerToolStatus('Copy unavailable'); }
+  });
+  $('#regenerate-answer').addEventListener('click', () => {
+    if (lastRequest && !busy) runMode(lastRequest.mode, lastRequest.text);
+  });
+  $('#stop-answer').addEventListener('click', async () => {
+    if (!busy) return;
+    await shadow.cancelAsk();
+    setBusy(false);
+    setRequestState('Stopped', 'stopped');
+    showAnswerToolStatus('Stopped');
+  });
+  $('#clear-answer').addEventListener('click', () => {
+    clearMessages();
+    setRequestState('', '');
+    $('#answer-tools').classList.remove('visible');
+  });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) { e.preventDefault(); send(); }
     if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); runMode('assist', ''); }
@@ -257,6 +304,7 @@
   shadow.on('capture:state', ({ active }) => {
     $('#live-dot').classList.toggle('off', !active);
     $('#stop-btn').classList.toggle('active', active);
+    setToolbarStatus(active ? 'Listening' : 'Ready', active ? 'listening' : 'ready');
     if (active) { startMic(); startSystemAudio(); } else { stopMic(); stopSystemAudio(); }
   });
   shadow.on('overlay:scroll', ({ direction }) => scrollOverlay(direction));
@@ -266,12 +314,14 @@
     if (userBubble) addUserBubble(userBubble);
     startAi(!!small);
     setBusy(true);
+    setRequestState('Generating', 'working');
   });
   shadow.on('llm:token', ({ text }) => appendToken(text));
-  shadow.on('llm:done', () => { finalizeAi(); setBusy(false); });
+  shadow.on('llm:done', () => { finalizeAi(); setBusy(false); setRequestState('', ''); });
   shadow.on('llm:error', ({ message }) => {
     if (!aiEl) startAi(true);
     aiEl.dataset.raw = message; finalizeAi(); setBusy(false);
+    setRequestState('Something went wrong', 'error');
   });
   let statusTimer = null;
   function showStatus(message) {
@@ -536,12 +586,12 @@
   const shiftKey = isMac ? '⇧' : 'Shift';
   const OB_STEPS = [
     {
-      icon: '👋',
+      icon: 'sparkles',
       title: 'Welcome to shadow',
       body: 'shadow is a private AI copilot that floats over your screen. It can <strong>see your screen</strong>, <strong>hear your meetings</strong>, and help you answer questions or solve coding problems — while staying hidden from most screen shares.<br><br>This quick guide gets you running in about a minute.'
     },
     ...(isMac ? [{
-      icon: '🔐',
+      icon: 'shield',
       title: 'Allow shadow to see & hear',
       body: 'shadow needs two macOS permissions. Click each button, turn <strong>shadow</strong> ON in the window that opens, then come back here.<ul><li><strong>Microphone</strong> — to hear you</li><li><strong>Screen Recording</strong> — to see your screen and hear meeting audio</li></ul>',
       buttons: [
@@ -549,23 +599,23 @@
         { label: 'Open Screen Recording settings', action: () => shadow.openPane('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture') }
       ]
     }] : [{
-      icon: '🔐',
+      icon: 'shield',
       title: 'Allow shadow to see & hear',
       body: 'When you first use a feature, Windows will prompt for <strong>Microphone</strong> and <strong>screen share</strong> access — click <strong>Allow</strong>. No manual settings needed.'
     }]),
     {
-      icon: '🔑',
+      icon: 'key',
       title: 'Connect an AI provider',
       body: 'shadow uses <strong>your own</strong> API key — pick <span class="hl">OpenAI</span>, <span class="hl">Anthropic</span>, or <span class="hl">Google Gemini</span>. Get a key from your provider, then paste it into shadow\'s Settings.<br><br><strong>Tip:</strong> the listening features need speech-to-text access (an OpenAI key with Whisper, or a Gemini key). A chat-only key still powers screen &amp; coding help.',
       buttons: [{ label: 'Open shadow Settings', action: () => { finishOnboard(); openSettings(); } }]
     },
     {
-      icon: '🫥',
+      icon: 'eye-off',
       title: 'Stay hidden in Zoom',
       body: 'shadow is hidden from most screen shares automatically (Google Meet, Teams, QuickTime — nothing to do). <strong>Zoom needs one setting:</strong><br><br>Zoom → <span class="hl">Settings</span> → <span class="hl">Share Screen</span> → <span class="hl">Advanced</span> → <strong>Screen capture mode</strong> → choose <strong>“Advanced capture with window filtering.”</strong><br><br>Avoid “<strong>without</strong> window filtering” — that mode reveals shadow.'
     },
     {
-      icon: '✨',
+      icon: 'check',
       title: 'You’re all set',
       body: `How to use shadow:<ul><li><span class="kbd">${mod}</span> <span class="kbd">\\</span> — <strong>Panic</strong>: hide shadow instantly if someone walks over. Press again to bring it back.</li><li><span class="kbd">${mod}</span> <span class="kbd">↵</span> — <strong>Assist</strong> with whatever's on screen or being said</li><li><span class="kbd">${mod}</span> <span class="kbd">H</span> — solve a coding problem on screen</li><li><span class="kbd">${mod}</span> <span class="kbd">${shiftKey}</span> <span class="kbd">H</span> — add another screenshot before solving (for problems that need scrolling)</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with <span class="kbd">${mod}</span><span class="kbd">${shiftKey}</span><span class="kbd">X</span>.`
     }
@@ -573,7 +623,7 @@
   let obIndex = 0;
   function renderOnboard() {
     const step = OB_STEPS[obIndex];
-    $('#ob-icon').textContent = step.icon;
+    $('#ob-icon').innerHTML = icon(step.icon, { size: 34 });
     $('#ob-title').textContent = step.title;
     $('#ob-body').innerHTML = step.body;
     const btns = $('#ob-buttons'); btns.innerHTML = '';
@@ -611,6 +661,7 @@
     const st = await shadow.captureState();
     $('#live-dot').classList.toggle('off', !st.active);
     $('#stop-btn').classList.toggle('active', st.active);
+    setToolbarStatus(st.active ? 'Listening' : 'Ready', st.active ? 'listening' : 'ready');
     if (!settings.onboarded) showOnboard();
   })();
 })();

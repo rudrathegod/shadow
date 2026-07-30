@@ -15,6 +15,7 @@
       <button class="tb-hide" id="hide-btn"><span class="chev"></span><span>Hide</span></button>
       <div class="tb-divider"></div>
       <button class="tb-stop" id="stop-btn" title="Start / stop listening"></button>
+      <span id="toolbar-status" data-state="ready"><span class="toolbar-status-dot"></span><span id="toolbar-status-text">Ready</span></span>
       <div class="tb-divider"></div>
       <button class="tb-panic" id="panic-btn" title="Panic — hide shadow"></button>
     </div>
@@ -26,26 +27,34 @@
         <div id="messages"></div>
 
         <div id="action-row">
-          <button class="act" data-mode="assist"><span class="ic"></span><span>Assist</span></button>
+          <button class="act act-primary" data-mode="assist"><span class="ic"></span><span class="act-label">Assist</span></button>
           <span class="sep">•</span>
-          <button class="act" data-mode="say"><span class="ic"></span><span>What should I say?</span></button>
+          <button class="act act-secondary" data-mode="say" title="What should I say?" aria-label="What should I say?"><span class="ic"></span><span class="act-label">Say</span></button>
           <span class="sep">•</span>
-          <button class="act" data-mode="followup"><span class="ic"></span><span>Follow-up questions</span></button>
+          <button class="act act-secondary" data-mode="followup" title="Follow-up questions" aria-label="Follow-up questions"><span class="ic"></span><span class="act-label">Follow up</span></button>
           <span class="sep">•</span>
-          <button class="act" data-mode="recap"><span class="ic"></span><span>Recap</span></button>
+          <button class="act act-secondary" data-mode="recap" title="Recap conversation" aria-label="Recap conversation"><span class="ic"></span><span class="act-label">Recap</span></button>
         </div>
+        <div id="request-state" class="request-state" aria-live="polite"></div>
 
         <div id="composer">
           <div id="input-area">
             <div id="placeholder">Ask about your screen or conversation, or <span class="keycap">⌘</span><span class="keycap">⏎</span> for Assist</div>
             <textarea id="input" rows="1" spellcheck="false"></textarea>
           </div>
-          <div id="composer-bottom">
+        <div id="composer-bottom">
             <button id="smart-toggle" class="smart-pill"><span class="ic"></span><span>Smart</span></button>
             <button id="more-btn" class="more-btn" title="Settings"></button>
             <div class="spacer"></div>
             <button id="send-btn" title="Send"></button>
           </div>
+        </div>
+        <div id="answer-tools" class="answer-tools" aria-label="Answer controls">
+          <button id="copy-answer" title="Copy answer" aria-label="Copy answer"></button>
+          <button id="regenerate-answer" title="Regenerate answer" aria-label="Regenerate answer"></button>
+          <button id="stop-answer" title="Stop response" aria-label="Stop response"></button>
+          <button id="clear-answer" title="Clear answer" aria-label="Clear answer"></button>
+          <span id="answer-tool-status" aria-live="polite"></span>
         </div>
         <div id="watermark">rudra</div>
       </div>
@@ -68,28 +77,36 @@
       </div>
 
       <div class="s-body s-panel" id="s-panel-general">
+        <div class="s-section">
         <label class="s-label">Solving &amp; chat <span class="s-hint">screenshots, Assist, questions</span></label>
         <div class="s-seg" id="provider-seg">
           <button data-provider="openai">OpenAI</button>
           <button data-provider="anthropic">Anthropic</button>
           <button data-provider="gemini">Gemini</button>
         </div>
+        </div>
 
+        <div class="s-section">
         <label class="s-label">Transcription <span class="s-hint">Anthropic has no speech API</span></label>
         <div class="s-seg" id="stt-seg">
           <button data-stt="auto">Auto</button>
           <button data-stt="openai">OpenAI</button>
           <button data-stt="gemini">Gemini</button>
         </div>
+        </div>
 
+        <div class="s-section">
         <label class="s-label">API keys <span class="s-hint">stored locally in shadow-data.json</span></label>
         <div class="s-field"><span>OpenAI</span><input id="key-openai" type="password" placeholder="sk-..." autocomplete="off" /></div>
         <div class="s-field"><span>Anthropic</span><input id="key-anthropic" type="password" placeholder="sk-ant-..." autocomplete="off" /></div>
         <div class="s-field"><span>Gemini</span><input id="key-gemini" type="password" placeholder="AIza..." autocomplete="off" /></div>
+        </div>
 
+        <div class="s-section">
         <label class="s-label">Models <span class="s-hint">fast = Smart off · smart = Smart on</span></label>
         <div class="s-field"><span>Fast</span><input id="model-fast" type="text" autocomplete="off" /></div>
         <div class="s-field"><span>Smart</span><input id="model-smart" type="text" autocomplete="off" /></div>
+        </div>
 
         <div class="s-status" id="s-status"></div>
       </div>

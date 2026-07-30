@@ -156,6 +156,29 @@ function bootRenderer() {
   return { window, state, tick: () => new Promise((r) => setTimeout(r, 30)) };
 }
 
+// --- icon integrity --------------------------------------------------------
+// A typo'd name renders an <svg> with no children, and a malformed arc (an `a`
+// command with anything but 7 params) makes the browser silently drop the rest
+// of the subpath — both are invisible until you look at the running app.
+async function testIcons() {
+  const { window, tick } = bootRenderer();
+  await tick();
+  const svgs = [...window.document.querySelectorAll('svg')];
+  assert.ok(svgs.length > 8, 'renderer painted its icons: ' + svgs.length);
+  for (const svg of svgs) {
+    assert.ok(svg.children.length, 'empty svg — unknown icon name near: ' + svg.parentElement.id);
+  }
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'renderer/icons.js'), 'utf8');
+  // Numbers in path data may abut (".5.5" is two), so tokenize rather than split.
+  const NUM = /-?(?:\d*\.\d+|\d+\.?)/g;
+  for (const [, d] of src.matchAll(/\bd="([^"]*)"/g)) {
+    for (const [, params] of d.matchAll(/[aA]([-\d.,\s]+)/g)) {
+      const n = params.match(NUM).length;
+      assert.strictEqual(n % 7, 0, `arc takes 7 params, got ${n}: a${params.trim()}`);
+    }
+  }
+}
+
 // --- answer rendering ------------------------------------------------------
 // The math branch of `assist` returns numbered working, which used to be joined
 // into one run-on paragraph because only bullets were handled.
@@ -250,6 +273,7 @@ async function testKeybinds() {
 (async () => {
   await testMarkdown();
   await testKeybinds();
+  await testIcons();
 
   assert.deepStrictEqual(await runSandboxed('rust', 'fn main(){}'), { supported: false });
 

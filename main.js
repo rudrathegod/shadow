@@ -16,6 +16,7 @@ let win = null;
 
 // -------- capture / transcript state -------- 
 const state = { capturing: false, busy: false, transcribing: { you: false, them: false } }; 
+let activeRequest = null;
 let sttDisabled = false; // set when the key can't reach any speech model (stops retry spam)
 let sttFailures = 0; // consecutive transient failures; resets on any success
 const STT_MAX_FAILURES = 3;
@@ -74,6 +75,10 @@ function createWindow() {
   win = new BrowserWindow({ 
     width: W, 
     height: H, 
+    minWidth: 420,
+    minHeight: 420,
+    maxWidth: 1000,
+    maxHeight: 1100,
     x, 
     y, 
     frame: false, 
@@ -326,6 +331,8 @@ async function runFeature(mode, userText, presetImages) {
   const def = MODES[mode];
   if (!def) return;
   state.busy = true;
+  const request = { cancelled: false };
+  activeRequest = request;
   try {
     const settings = store.getSettings();
     const llm = createLLM(settings);
@@ -356,6 +363,7 @@ async function runFeature(mode, userText, presetImages) {
     // answer with two more optional calls.
     let hitRateLimit = false;
     async function attempt() {
+      if (request.cancelled) return { text: '', stalled: false, cancelled: true };
       let acc = '';
       // Losing the race doesn't cancel the underlying stream — it can wake up
       // later and keep firing onToken. Without this flag those stale tokens get
@@ -371,7 +379,7 @@ async function runFeature(mode, userText, presetImages) {
         system: def.system,
         turns: [{ role: 'user', text: built }],
         imageDataUrls: images,
-        onToken: (t) => { if (abandoned) return; acc += t; send('llm:token', { text: t }); resetIdle(); },
+        onToken: (t) => { if (abandoned || request.cancelled) return; acc += t; send('llm:token', { text: t }); resetIdle(); },
         onRateLimit: (attempt, waitMs) => { hitRateLimit = true; send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` }); }
       }).then((full) => ({ timedOut: false, full }));
       // Once the race is settled nothing is awaiting `streamed`, so a late
@@ -380,6 +388,7 @@ async function runFeature(mode, userText, presetImages) {
       streamed.catch(() => {});
       try {
         const result = await Promise.race([streamed, timedOut]);
+        if (request.cancelled) return { text: '', stalled: false, cancelled: true };
         if (!result.timedOut) return { text: result.full, stalled: false };
         abandoned = true;
         // A true hang with zero tokens is treated the same as an empty completion
@@ -392,12 +401,14 @@ async function runFeature(mode, userText, presetImages) {
     }
 
     let { text: full, stalled } = await attempt();
+    if (request.cancelled) return;
     // A handful of providers occasionally return a genuinely empty completion
     // (transient safety pass, cold-start hiccup) with no error thrown — one
     // silent retry clears most of these before bothering the user.
     if (!full || !full.trim()) {
       send('llm:start', { userBubble, small: !!def.small });
       ({ text: full, stalled } = await attempt());
+      if (request.cancelled) return;
     }
     if (!full || !full.trim()) {
       send('llm:error', { message: `The model gave no response twice in a row (empty completion, or no reply after ${IDLE_TIMEOUT_MS / 1000}s each time) — check your network or API key access and try again.` });
@@ -410,6 +421,7 @@ async function runFeature(mode, userText, presetImages) {
       } else if (mode === 'leetcode') {
         send('status', { message: 'Verifying the solution runs correctly…' });
         const verified = await verifyAndRepair(llm, full, images);
+        if (request.cancelled) return;
         if (verified.text) {
           full = verified.text;
           send('llm:start', { userBubble, small: !!def.small });
@@ -424,7 +436,10 @@ async function runFeature(mode, userText, presetImages) {
     console.log('[llm] error', e && e.message);
     send('llm:error', { message: 'Error: ' + (e && e.message ? e.message : String(e)) }); 
   } finally { 
-    state.busy = false; 
+    // A cancelled request keeps running to completion (there's no abort on the
+    // underlying stream), so it must not clear the busy flag out from under the
+    // request that replaced it — otherwise a third one starts alongside it.
+    if (activeRequest === request) { activeRequest = null; state.busy = false; }
   } 
 } 
 
@@ -558,6 +573,12 @@ ipcMain.on('app:quit', () => app.quit());
 ipcMain.handle('capture:toggle', () => setCapturing(!state.capturing)); 
 ipcMain.handle('capture:state', () => ({ active: state.capturing })); 
 ipcMain.on('ask', (_e, payload) => runFeature(payload.mode, payload.text)); 
+ipcMain.handle('ask:cancel', () => {
+  if (!activeRequest) return false;
+  activeRequest.cancelled = true;
+  state.busy = false;
+  return true;
+});
 ipcMain.on('mic:pcm', (_e, arrayBuffer) => { 
   if (state.capturing) buffers.you.push(Buffer.from(arrayBuffer)); 
 }); 
