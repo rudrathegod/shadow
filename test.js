@@ -134,7 +134,7 @@ function bootRenderer() {
   const { window } = dom;
   const defaults = require('./src/store').defaultShortcuts();
   const actions = Object.keys(defaults).map((id) => ({ id, label: id }));
-  const state = { saved: null, captured: [], handlers: {}, defaults, actions, ignoreCalls: [] };
+  const state = { saved: null, captured: [], handlers: {}, defaults, actions, ignoreCalls: [], transcript: '' };
   const noop = () => {};
   window.shadow = {
     platform: 'darwin',
@@ -142,13 +142,13 @@ function bootRenderer() {
       provider: 'anthropic', smart: true, windowPosition: 'top-center',
       apiKeys: {}, models: { anthropic: {} }, shortcuts: { ...defaults }, onboarded: true
     }),
-    settingsSet: async () => ({}), captureState: async () => ({ active: false }),
+    settingsSet: async (patch) => { state.settingsSaved = patch; return {}; }, captureState: async () => ({ active: false }),
     shortcutsGet: async () => ({ actions, shortcuts: { ...defaults }, defaults: { ...defaults } }),
     shortcutsSet: async (n) => { state.saved = { ...n }; return { shortcuts: { ...n }, failed: [] }; },
     shortcutsCapture: async (on) => { state.captured.push(on); return true; },
     windowSetPosition: async () => ({}), checkUpdate: async () => ({}), installUpdate: async () => ({}),
     setIgnoreMouse: (v) => state.ignoreCalls.push(v), log: noop, ask: noop, captureToggle: async () => {},
-    cancelAsk: async () => true,
+    cancelAsk: async () => true, transcriptGet: async () => state.transcript,
     quitApp: noop, openPane: noop, micPcm: noop, systemPcm: noop, panic: noop,
     on: (ch, cb) => { state.handlers[ch] = cb; }
   };
@@ -284,6 +284,85 @@ async function testUpdateButtonRecoversFromFailure() {
   window.close();
 }
 
+// Copy-code must offer only the fenced block, and stay hidden for answers that
+// don't have one — a bare Copy already covers those, a second identical button
+// would just be noise.
+async function testCopyCode() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  const $ = (s) => window.document.querySelector(s);
+
+  state.handlers['llm:start']({ userBubble: null, small: false, mode: 'ask', text: 'hi', replayable: true });
+  state.handlers['llm:token']({ text: 'Approach:\n\n```js\nconst x = 1;\n```\n\nO(1).' });
+  state.handlers['llm:done']({});
+  assert.ok(!$('#copy-code').classList.contains('hidden'), 'copy-code shown when the answer has a fenced block');
+  $('#copy-code').click();
+  await tick();
+  assert.strictEqual($('#answer-tool-status').textContent, 'Copy unavailable',
+    'clicked through to the clipboard call (jsdom has none) rather than being a no-op');
+
+  state.handlers['llm:start']({ userBubble: null, small: false, mode: 'ask', text: 'hi', replayable: true });
+  state.handlers['llm:token']({ text: 'Just prose, no code here.' });
+  state.handlers['llm:done']({});
+  assert.ok($('#copy-code').classList.contains('hidden'), 'copy-code hidden for a plain-text answer');
+}
+
+// A silently-disabled STT key used to only ever surface as an 11s toast — miss
+// that window and "Listening" kept claiming to work. The toolbar state has to
+// persist until the key issue is actually resolved.
+async function testSttOffPersists() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  const $ = (s) => window.document.querySelector(s);
+  const statusText = () => $('#toolbar-status-text').textContent;
+
+  state.handlers['capture:state']({ active: true });
+  assert.strictEqual(statusText(), 'Listening');
+  state.handlers['stt:state']({ off: true });
+  assert.strictEqual(statusText(), 'Mic off', 'a disabled key outranks Listening, and does not auto-clear');
+  await tick(); await tick();
+  assert.strictEqual(statusText(), 'Mic off', 'still showing after time passes, unlike the transient toast');
+  state.handlers['stt:state']({ off: false });
+  assert.strictEqual(statusText(), 'Listening', 'clears once the key issue is resolved');
+}
+
+// The "recap when you stop listening" checkbox has to round-trip through the
+// same settingsSet(...) save path as every other setting, or it would silently
+// revert the moment Settings is reopened.
+async function testRecapOnStopSetting() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  const $ = (s) => window.document.querySelector(s);
+  const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+  click($('#more-btn'));
+  await tick();
+  assert.strictEqual($('#recap-on-stop').checked, false, 'defaults off');
+  $('#recap-on-stop').checked = true;
+  click($('#s-close'));
+  await tick();
+  assert.strictEqual(state.settingsSaved.recapOnStop, true, 'the toggle is included in the saved settings patch');
+}
+
+// Copying the transcript needs to tell the user something either way — silence
+// on an empty transcript reads as a bug, not as "nothing to copy".
+async function testTranscriptCopy() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  const $ = (s) => window.document.querySelector(s);
+  const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+  click($('#transcript-btn'));
+  await tick();
+  assert.strictEqual($('#shadow-status').textContent, 'Nothing captured yet.');
+
+  state.transcript = 'You: hello\nThem: hi there';
+  click($('#transcript-btn'));
+  await tick();
+  assert.strictEqual($('#shadow-status').textContent, 'Copy unavailable.',
+    'reached the clipboard call with the fetched transcript (jsdom has no clipboard API)');
+}
+
 // The accelerator conversion is the kind of branchy mapping that breaks quietly:
 // a wrong key name just produces a shortcut that never fires.
 async function testKeybinds() {
@@ -344,6 +423,10 @@ async function testKeybinds() {
   await testAnswerControls();
   await testSettingsClickThrough();
   await testUpdateButtonRecoversFromFailure();
+  await testCopyCode();
+  await testSttOffPersists();
+  await testRecapOnStopSetting();
+  await testTranscriptCopy();
 
   assert.deepStrictEqual(await runSandboxed('rust', 'fn main(){}'), { supported: false });
 

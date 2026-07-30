@@ -75,6 +75,8 @@ html, body {
 #toolbar-status[data-state="listening"] .toolbar-status-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.7); }
 #toolbar-status[data-state="working"] { color: #c4b5fd; }
 #toolbar-status[data-state="working"] .toolbar-status-dot { background: var(--accent); animation: pulse 1.2s infinite; }
+#toolbar-status[data-state="stt-off"] { color: #fbbf24; }
+#toolbar-status[data-state="stt-off"] .toolbar-status-dot { background: #f59e0b; }
 .tb-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.10); margin: 0 2px; }
 #toolbar button { border: none; background: transparent; color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background 140ms ease, transform 140ms ease; }
 .tb-logo { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.06) !important; }
@@ -88,6 +90,8 @@ html, body {
 .tb-stop.active { color: #ff6b6b; }
 .tb-panic { width: 28px; height: 28px; border-radius: var(--r-8); color: rgba(255,255,255,0.75); }
 .tb-panic:hover { background: rgba(239,68,68,0.18); color: #f87171; }
+.tb-transcript { width: 28px; height: 28px; border-radius: var(--r-8); color: rgba(255,255,255,0.75); }
+.tb-transcript:hover { background: rgba(255,255,255,0.08); color: #fff; }
 
 /* ============================ Panel ============================ */
 #panel-wrap { position: relative; margin-top: 12px; width: min(624px, 94vw); }
@@ -275,6 +279,9 @@ button:focus { outline: none; }
 .s-field input { flex: 1; padding: 8px 10px; border-radius: var(--r-8); border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--tx-1); font-size: 13px; font-family: var(--font); outline: none; }
 .s-field input:focus { border-color: var(--accent); }
 .s-status { color: var(--tx-mut); font-size: 12px; margin-top: 10px; min-height: 16px; }
+.s-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.s-toggle-row span { color: var(--tx-2); font-size: 13px; }
+.s-toggle-row input { flex: none; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 
 .s-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); }
 .s-tab { flex: none; border: none; background: none; color: var(--tx-mut); font-size: 13px; font-weight: 600; padding: 8px 10px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 140ms ease; }

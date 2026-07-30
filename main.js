@@ -134,14 +134,15 @@ async function flushChannel(channel) {
     const settings = store.getSettings(); 
     const stt = createSTT(settings); 
     if (!stt.available) { 
-      if (!sttDisabled) { 
-        sttDisabled = true; 
+      if (!sttDisabled) {
+        sttDisabled = true;
         send('status', {
           message: stt.wanted === 'auto'
             ? 'No transcription key set. Add an OpenAI (Whisper) or Gemini key in Settings to enable listening. Screen/LeetCode features work without it.'
             : 'Transcription is set to ' + stt.wanted + ', but no ' + stt.wanted + ' key is set. Add one in Settings, or switch transcription to Auto.'
         });
-      } 
+        send('stt:state', { off: true });
+      }
       return; 
     } 
 
@@ -173,6 +174,7 @@ function handleSttError(err) {
   if (err.status === 403 || err.status === 401 || err.code === 'model_not_found') {
     sttDisabled = true;
     send('status', { message: 'Transcription off: your ' + err.provider + ' key has no access to a speech-to-text model (403). Screen + LeetCode still work. To enable listening: give the key Whisper/transcription access, or add a Gemini key in Settings and reopen.' });
+    send('stt:state', { off: true });
     return;
   }
 
@@ -192,6 +194,7 @@ function handleSttError(err) {
   if (sttFailures >= STT_MAX_FAILURES) {
     sttDisabled = true;
     send('status', { message: 'Transcription off after ' + STT_MAX_FAILURES + ' errors in a row (' + err.provider + '): ' + err.message + ' — change any setting to re-enable.' });
+    send('stt:state', { off: true });
   } else {
     send('status', { message: 'Transcription error (' + err.provider + '): ' + err.message + ' — retrying.' });
   }
@@ -213,18 +216,21 @@ function stopFlushLoop() {
 } 
 
 // -------- capture toggle -------- 
-function setCapturing(active) { 
-  state.capturing = active; 
-  if (active) { 
-    startFlushLoop(); 
-  } else { 
-    stopFlushLoop(); 
-    buffers.you = []; 
-    buffers.them = []; 
-  } 
-  send('capture:state', { active }); 
-  return active; 
-} 
+function setCapturing(active) {
+  state.capturing = active;
+  if (active) {
+    startFlushLoop();
+  } else {
+    stopFlushLoop();
+    buffers.you = [];
+    buffers.them = [];
+    // Opt-in: a summary waiting the moment you stop listening beats having to
+    // remember to click Recap before the transcript scrolls out of mind.
+    if (store.getSettings().recapOnStop && transcript.length && !state.busy) runFeature('recap', '');
+  }
+  send('capture:state', { active });
+  return active;
+}
 
 // -------- screenshot capture (shared by single-shot and batched capture) --------
 async function captureOneScreenshot() {
@@ -549,11 +555,13 @@ Start-Process -FilePath (Join-Path $current 'shadow.exe')
 });
 ipcMain.handle('settings:get', () => store.getSettings());
 ipcMain.handle('settings:set', (_e, patch) => {
+  if (sttDisabled) send('stt:state', { off: false });
   sttDisabled = false;
   sttFailures = 0;
   sttCooldownUntil = 0; // switching provider/key should retry immediately
   return store.setSettings(patch);
 });
+ipcMain.handle('transcript:get', () => transcript.map((t) => (t.channel === 'them' ? 'Them: ' : 'You: ') + t.text).join('\n'));
 ipcMain.handle('shortcuts:get', () => ({
   actions: Object.entries(SHORTCUT_ACTIONS).map(([id, d]) => ({ id, label: d.label })),
   shortcuts: store.getSettings().shortcuts || {},

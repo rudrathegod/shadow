@@ -22,9 +22,11 @@
   $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
   $('#send-btn').innerHTML = icon('play', { size: 15 });
   $('#copy-answer').innerHTML = icon('copy', { size: 15 });
+  $('#copy-code').innerHTML = icon('code', { size: 15 });
   $('#regenerate-answer').innerHTML = icon('refresh-cw', { size: 15 });
   $('#stop-answer').innerHTML = icon('stop-square', { size: 14 });
   $('#clear-answer').innerHTML = icon('trash', { size: 15 });
+  $('#transcript-btn').innerHTML = icon('copy', { size: 15 });
 
   // ---- state -------------------------------------------------------------
   let settings = null;
@@ -33,8 +35,10 @@
   let aiEl = null;       // current streaming <div class="ai-text">
   let caretEl = null;
   let lastAnswerText = '';
+  let lastAnswerCode = '';
   let lastRequest = null;
   let listening = false;
+  let sttOff = false;
 
   const messages = $('#messages');
 
@@ -45,6 +49,13 @@
   // (d/dx, ∫, x^2), which needs no special handling beyond escaping.
   const BULLET = /^\s*[-*]\s+/;
   const NUMBERED = /^\s*\d+[.)]\s+/;
+  // Same shape as extractCode in src/verify.js — the renderer has no require(),
+  // so this is a deliberate duplicate rather than a shared module.
+  const CODE_FENCE = /```\w*\n([\s\S]*?)```/;
+  function extractFencedCode(text) {
+    const m = CODE_FENCE.exec(text || '');
+    return m ? m[1] : '';
+  }
   function renderMarkdown(text) {
     const lines = text.split('\n');
     let html = '', inCode = false, listTag = null, buf = [];
@@ -78,7 +89,10 @@
     return html;
   }
 
-  function clearMessages() { messages.innerHTML = ''; aiEl = null; caretEl = null; lastAnswerText = ''; }
+  function clearMessages() {
+    messages.innerHTML = ''; aiEl = null; caretEl = null; lastAnswerText = ''; lastAnswerCode = '';
+    $('#copy-code').classList.add('hidden');
+  }
 
   function addUserBubble(text) {
     const b = document.createElement('div');
@@ -112,6 +126,8 @@
     if (!aiEl) return;
     const raw = aiEl.dataset.raw || '';
     lastAnswerText = ok === false ? '' : raw;
+    lastAnswerCode = ok === false ? '' : extractFencedCode(raw);
+    $('#copy-code').classList.toggle('hidden', !lastAnswerCode);
     aiEl.innerHTML = renderMarkdown(raw);
     aiEl = null; caretEl = null;
   }
@@ -127,9 +143,12 @@
     $('#toolbar-status-text').textContent = text;
     $('#toolbar-status').dataset.state = state;
   }
-  // Working outranks Listening while a request is in flight; when it ends the
-  // toolbar drops back to whichever of the two idle states applies.
+  // Working outranks everything while a request streams. Below that, a
+  // transcription failure needs to stay visible until it's resolved — a toast
+  // that auto-hides after 11s is easy to miss if you weren't looking at that
+  // moment, and "Listening" would otherwise keep claiming to work.
   function restoreToolbarStatus() {
+    if (sttOff) return setToolbarStatus('Mic off', 'stt-off');
     setToolbarStatus(listening ? 'Listening' : 'Ready', listening ? 'listening' : 'ready');
   }
   function showAnswerToolStatus(text) {
@@ -180,6 +199,13 @@
       showAnswerToolStatus('Copied');
     } catch { showAnswerToolStatus('Copy unavailable'); }
   });
+  $('#copy-code').addEventListener('click', async () => {
+    if (!lastAnswerCode) return;
+    try {
+      await navigator.clipboard.writeText(lastAnswerCode);
+      showAnswerToolStatus('Code copied');
+    } catch { showAnswerToolStatus('Copy unavailable'); }
+  });
   $('#regenerate-answer').addEventListener('click', () => {
     if (lastRequest && !busy) runMode(lastRequest.mode, lastRequest.text);
   });
@@ -191,6 +217,14 @@
     setRequestState('Stopped', 'stopped');
     restoreToolbarStatus();
     showAnswerToolStatus('Stopped');
+  });
+  $('#transcript-btn').addEventListener('click', async () => {
+    const text = await shadow.transcriptGet();
+    if (!text) return showStatus('Nothing captured yet.');
+    try {
+      await navigator.clipboard.writeText(text);
+      showStatus('Transcript copied.');
+    } catch { showStatus('Copy unavailable.'); }
   });
   $('#clear-answer').addEventListener('click', () => {
     clearMessages();
@@ -318,6 +352,7 @@
     if (!busy) restoreToolbarStatus();
     if (active) { startMic(); startSystemAudio(); } else { stopMic(); stopSystemAudio(); }
   });
+  shadow.on('stt:state', ({ off }) => { sttOff = off; if (!busy) restoreToolbarStatus(); });
   shadow.on('overlay:scroll', ({ direction }) => scrollOverlay(direction));
   shadow.on('overlay:focus-input', () => input.focus());
   shadow.on('llm:start', ({ userBubble, small, mode, text, replayable }) => {
@@ -387,6 +422,7 @@
     $('#s-status').textContent = statusText();
     $('#s-version').textContent = 'shadow v' + version;
     document.querySelectorAll('#pos-grid button').forEach((b) => b.classList.toggle('on', b.dataset.pos === (settings.windowPosition || 'top-center')));
+    $('#recap-on-stop').checked = !!settings.recapOnStop;
   }
 
   // ---- settings: tabs -----------------------------------------------------
@@ -581,6 +617,7 @@
     settings.apiKeys.openai = $('#key-openai').value.trim();
     settings.apiKeys.anthropic = $('#key-anthropic').value.trim();
     settings.apiKeys.gemini = $('#key-gemini').value.trim();
+    settings.recapOnStop = $('#recap-on-stop').checked;
     syncCurrentModelFields();
     await shadow.settingsSet(settings);
   }

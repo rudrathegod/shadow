@@ -17,6 +17,8 @@
       <button class="tb-stop" id="stop-btn" aria-label="Start / stop listening"></button>
       <span id="toolbar-status" data-state="ready"><span class="toolbar-status-dot"></span><span id="toolbar-status-text">Ready</span></span>
       <div class="tb-divider"></div>
+      <button class="tb-transcript" id="transcript-btn" aria-label="Copy full transcript"></button>
+      <div class="tb-divider"></div>
       <button class="tb-panic" id="panic-btn" aria-label="Panic — hide shadow"></button>
     </div>
 
@@ -51,6 +53,7 @@
         </div>
         <div id="answer-tools" class="answer-tools" aria-label="Answer controls">
           <button id="copy-answer" aria-label="Copy answer"></button>
+          <button id="copy-code" class="hidden" aria-label="Copy code only"></button>
           <button id="regenerate-answer" aria-label="Regenerate answer"></button>
           <button id="stop-answer" aria-label="Stop response"></button>
           <button id="clear-answer" aria-label="Clear answer"></button>
@@ -106,6 +109,11 @@
         <label class="s-label">Models <span class="s-hint">fast = Smart off · smart = Smart on</span></label>
         <div class="s-field"><span>Fast</span><input id="model-fast" type="text" autocomplete="off" /></div>
         <div class="s-field"><span>Smart</span><input id="model-smart" type="text" autocomplete="off" /></div>
+        </div>
+
+        <div class="s-section">
+        <label class="s-label">Listening <span class="s-hint">the ▢ toolbar button</span></label>
+        <label class="s-toggle-row"><span>Recap when you stop listening</span><input id="recap-on-stop" type="checkbox" /></label>
         </div>
 
         <div class="s-status" id="s-status"></div>

@@ -23,6 +23,7 @@ const DEFAULTS = {
   provider: 'anthropic',      // screen solving + chat
   sttProvider: 'auto',        // 'auto' | 'openai' | 'gemini' — Anthropic has no speech API
   smart: true,
+  recapOnStop: false,
   windowPosition: 'top-center',
   shortcuts: { ...DEFAULT_SHORTCUTS },
   apiKeys: { openai: '', anthropic: '', gemini: '' },
