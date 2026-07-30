@@ -337,7 +337,11 @@ async function runFeature(mode, userText, presetImages) {
     const settings = store.getSettings();
     const llm = createLLM(settings);
     const userBubble = def.userBubble !== null ? def.userBubble : (mode === 'ask' ? userText : null);
-    send('llm:start', { userBubble, small: !!def.small });
+    // The renderer can't know the mode for runs started from a global shortcut,
+    // so every start carries what Regenerate needs to replay it. Runs fed
+    // preset screenshots aren't replayable — re-running would drop the images.
+    const start = { userBubble, small: !!def.small, mode, text: userText || '', replayable: !presetImages };
+    send('llm:start', start);
 
     if (!llm.ready) {
       send('llm:error', { message: 'Add your ' + settings.provider + ' API key in Settings (gear icon) to start. Model: ' + (llm.model || 'unset') + '.' });
@@ -406,7 +410,7 @@ async function runFeature(mode, userText, presetImages) {
     // (transient safety pass, cold-start hiccup) with no error thrown — one
     // silent retry clears most of these before bothering the user.
     if (!full || !full.trim()) {
-      send('llm:start', { userBubble, small: !!def.small });
+      send('llm:start', start);
       ({ text: full, stalled } = await attempt());
       if (request.cancelled) return;
     }
@@ -424,7 +428,7 @@ async function runFeature(mode, userText, presetImages) {
         if (request.cancelled) return;
         if (verified.text) {
           full = verified.text;
-          send('llm:start', { userBubble, small: !!def.small });
+          send('llm:start', start);
           send('llm:token', { text: full });
         }
         if (verified.note) send('status', { message: verified.note });

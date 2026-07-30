@@ -34,6 +34,7 @@
   let caretEl = null;
   let lastAnswerText = '';
   let lastRequest = null;
+  let listening = false;
 
   const messages = $('#messages');
 
@@ -105,10 +106,12 @@
     aiEl.insertBefore(span, caretEl);
   }
 
-  function finalizeAi() {
+  // `ok` false means the bubble holds an error message, which shouldn't become
+  // the thing Copy hands you.
+  function finalizeAi(ok) {
     if (!aiEl) return;
     const raw = aiEl.dataset.raw || '';
-    lastAnswerText = raw;
+    lastAnswerText = ok === false ? '' : raw;
     aiEl.innerHTML = renderMarkdown(raw);
     aiEl = null; caretEl = null;
   }
@@ -124,6 +127,11 @@
     $('#toolbar-status-text').textContent = text;
     $('#toolbar-status').dataset.state = state;
   }
+  // Working outranks Listening while a request is in flight; when it ends the
+  // toolbar drops back to whichever of the two idle states applies.
+  function restoreToolbarStatus() {
+    setToolbarStatus(listening ? 'Listening' : 'Ready', listening ? 'listening' : 'ready');
+  }
   function showAnswerToolStatus(text) {
     const el = $('#answer-tool-status');
     el.textContent = text;
@@ -135,8 +143,8 @@
   function runMode(mode, text) {
     if (busy) return;
     setBusy(true);
-    lastRequest = { mode, text: text || '' };
     setRequestState('Working', 'working');
+    setToolbarStatus('Working', 'working');
     shadow.ask({ mode, text: text || '' });
   }
 
@@ -179,7 +187,9 @@
     if (!busy) return;
     await shadow.cancelAsk();
     setBusy(false);
+    finalizeAi(true);
     setRequestState('Stopped', 'stopped');
+    restoreToolbarStatus();
     showAnswerToolStatus('Stopped');
   });
   $('#clear-answer').addEventListener('click', () => {
@@ -304,24 +314,32 @@
   shadow.on('capture:state', ({ active }) => {
     $('#live-dot').classList.toggle('off', !active);
     $('#stop-btn').classList.toggle('active', active);
-    setToolbarStatus(active ? 'Listening' : 'Ready', active ? 'listening' : 'ready');
+    listening = active;
+    if (!busy) restoreToolbarStatus();
     if (active) { startMic(); startSystemAudio(); } else { stopMic(); stopSystemAudio(); }
   });
   shadow.on('overlay:scroll', ({ direction }) => scrollOverlay(direction));
   shadow.on('overlay:focus-input', () => input.focus());
-  shadow.on('llm:start', ({ userBubble, small }) => {
+  shadow.on('llm:start', ({ userBubble, small, mode, text, replayable }) => {
     clearMessages();
     if (userBubble) addUserBubble(userBubble);
     startAi(!!small);
     setBusy(true);
     setRequestState('Generating', 'working');
+    setToolbarStatus('Working', 'working');
+    // Main is the only place that knows the mode for shortcut-driven runs.
+    lastRequest = replayable ? { mode, text: text || '' } : null;
+    $('#regenerate-answer').hidden = !lastRequest;
   });
   shadow.on('llm:token', ({ text }) => appendToken(text));
-  shadow.on('llm:done', () => { finalizeAi(); setBusy(false); setRequestState('', ''); });
+  shadow.on('llm:done', () => {
+    finalizeAi(true); setBusy(false); setRequestState('', ''); restoreToolbarStatus();
+  });
   shadow.on('llm:error', ({ message }) => {
     if (!aiEl) startAi(true);
-    aiEl.dataset.raw = message; finalizeAi(); setBusy(false);
+    aiEl.dataset.raw = message; finalizeAi(false); setBusy(false);
     setRequestState('Something went wrong', 'error');
+    restoreToolbarStatus();
   });
   let statusTimer = null;
   function showStatus(message) {
@@ -661,7 +679,8 @@
     const st = await shadow.captureState();
     $('#live-dot').classList.toggle('off', !st.active);
     $('#stop-btn').classList.toggle('active', st.active);
-    setToolbarStatus(st.active ? 'Listening' : 'Ready', st.active ? 'listening' : 'ready');
+    listening = st.active;
+    restoreToolbarStatus();
     if (!settings.onboarded) showOnboard();
   })();
 })();
