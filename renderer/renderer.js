@@ -361,7 +361,11 @@
 
   // ---- settings ----------------------------------------------------------
   const scrim = $('#settings-scrim');
-  function openSettings() { fillSettings(); loadKeys(); scrim.classList.remove('hidden'); }
+  // ⌘, opens Settings from anywhere, including while the mouse sits off the
+  // panel in click-through mode — without forcing setIgnore(false) here, clicks
+  // on the freshly-opened modal fell through to whatever's behind shadow until
+  // the mouse happened to move.
+  function openSettings() { fillSettings(); loadKeys(); scrim.classList.remove('hidden'); setIgnore(false); }
   function closeSettings() {
     // Closing mid-recording would otherwise leave every global shortcut released.
     if (recordingId) stopRecording(false);
@@ -517,9 +521,17 @@
       btn.disabled = true;
       // Only macOS swaps the bundle in place; elsewhere this just opens the
       // download, so don't leave the button stuck on "Installing…".
-      const res = await shadow.installUpdate(updateZip);
-      if (!res || !res.ok) {
-        btn.textContent = 'Download opened in your browser — unzip and replace shadow';
+      // installUpdate can reject outright (offline mid-download, bad zip on the
+      // release, unzip failing) — without a catch that left the button disabled
+      // on "Installing…" forever, with no way to retry short of restarting shadow.
+      try {
+        const res = await shadow.installUpdate(updateZip);
+        if (!res || !res.ok) {
+          btn.textContent = 'Download opened in your browser — unzip and replace shadow';
+          btn.disabled = false;
+        }
+      } catch {
+        btn.textContent = 'Install failed — click to try again';
         btn.disabled = false;
       }
       return;

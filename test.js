@@ -134,7 +134,7 @@ function bootRenderer() {
   const { window } = dom;
   const defaults = require('./src/store').defaultShortcuts();
   const actions = Object.keys(defaults).map((id) => ({ id, label: id }));
-  const state = { saved: null, captured: [], handlers: {}, defaults, actions };
+  const state = { saved: null, captured: [], handlers: {}, defaults, actions, ignoreCalls: [] };
   const noop = () => {};
   window.shadow = {
     platform: 'darwin',
@@ -147,7 +147,7 @@ function bootRenderer() {
     shortcutsSet: async (n) => { state.saved = { ...n }; return { shortcuts: { ...n }, failed: [] }; },
     shortcutsCapture: async (on) => { state.captured.push(on); return true; },
     windowSetPosition: async () => ({}), checkUpdate: async () => ({}), installUpdate: async () => ({}),
-    setIgnoreMouse: noop, log: noop, ask: noop, captureToggle: async () => {},
+    setIgnoreMouse: (v) => state.ignoreCalls.push(v), log: noop, ask: noop, captureToggle: async () => {},
     cancelAsk: async () => true,
     quitApp: noop, openPane: noop, micPcm: noop, systemPcm: noop, panic: noop,
     on: (ch, cb) => { state.handlers[ch] = cb; }
@@ -256,6 +256,34 @@ async function testMarkdown() {
   window.close();
 }
 
+// Opening Settings via ⌘, must drop click-through, or the modal renders under
+// a mouse that still passes clicks through to whatever's behind shadow.
+async function testSettingsClickThrough() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, key: ',', metaKey: true }));
+  await tick();
+  assert.strictEqual(state.ignoreCalls[state.ignoreCalls.length - 1], false,
+    'opening settings re-enables mouse events on the panel');
+  window.close();
+}
+
+// installUpdate can reject (offline mid-download, bad release asset) — the
+// button must recover instead of staying stuck disabled on "Installing…".
+async function testUpdateButtonRecoversFromFailure() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  window.shadow.checkUpdate = async () => ({ current: '1.0.0', latest: '1.1.0', zipUrl: 'https://example.test/x.zip' });
+  window.shadow.installUpdate = async () => { throw new Error('network down'); };
+  const btn = window.document.querySelector('#update-btn');
+  const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  click(btn); await tick(); // "Checking..." -> finds an update
+  click(btn); await tick(); // "Installing..." -> installUpdate rejects
+  assert.strictEqual(btn.disabled, false, 'button re-enabled after a failed install');
+  assert.match(btn.textContent, /try again/i, 'failure is surfaced, not silently stuck');
+  window.close();
+}
+
 // The accelerator conversion is the kind of branchy mapping that breaks quietly:
 // a wrong key name just produces a shortcut that never fires.
 async function testKeybinds() {
@@ -314,6 +342,8 @@ async function testKeybinds() {
   await testKeybinds();
   await testIcons();
   await testAnswerControls();
+  await testSettingsClickThrough();
+  await testUpdateButtonRecoversFromFailure();
 
   assert.deepStrictEqual(await runSandboxed('rust', 'fn main(){}'), { supported: false });
 
