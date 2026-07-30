@@ -675,9 +675,9 @@
     // overlay is hidden there's no UI left to explain it.
     const keys = await shadow.shortcutsGet();
     const back = keys.shortcuts.panic || keys.defaults.panic;
-    $('#panic-btn').title = back
+    $('#panic-btn').setAttribute('aria-label', back
       ? 'Panic — hide shadow (' + prettyAccel(back) + ' brings it back)'
-      : 'Panic — hide shadow (set a shortcut in Settings › Keys to bring it back)';
+      : 'Panic — hide shadow (set a shortcut in Settings › Keys to bring it back)');
     const st = await shadow.captureState();
     $('#live-dot').classList.toggle('off', !st.active);
     $('#stop-btn').classList.toggle('active', st.active);

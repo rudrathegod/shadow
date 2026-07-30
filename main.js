@@ -384,7 +384,11 @@ async function runFeature(mode, userText, presetImages) {
         turns: [{ role: 'user', text: built }],
         imageDataUrls: images,
         onToken: (t) => { if (abandoned || request.cancelled) return; acc += t; send('llm:token', { text: t }); resetIdle(); },
-        onRateLimit: (attempt, waitMs) => { hitRateLimit = true; send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` }); }
+        onRateLimit: (attempt, waitMs) => {
+          if (request.cancelled) return;
+          hitRateLimit = true;
+          send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` });
+        }
       }).then((full) => ({ timedOut: false, full }));
       // Once the race is settled nothing is awaiting `streamed`, so a late
       // failure would surface as an unhandled rejection. Swallow it here; this
