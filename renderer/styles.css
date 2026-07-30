@@ -357,7 +357,7 @@ button:focus { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
   #panel, .user-bubble, .ai-text .w { animation: none !important; opacity: 1 !important; transform: none !important; }
-  #live-dot { animation: none !important; }
+  #live-dot, .toolbar-status-dot { animation: none !important; }
 }
 
 /* watermark */

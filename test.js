@@ -170,7 +170,11 @@ async function testAnswerControls() {
   // A shortcut-driven leetcode run: preset images can't be replayed.
   state.handlers['llm:start']({ userBubble: null, small: false, mode: 'leetcode', text: '', replayable: false });
   assert.strictEqual(status(), 'Working', 'toolbar reports Working while streaming');
-  assert.ok($('#regenerate-answer').hidden, 'regenerate hidden when the run cannot be replayed');
+  // Asserted as the class, not the `hidden` attribute or a computed style: the
+  // attribute's UA rule loses to `.answer-tools button { display: grid }`, and
+  // jsdom's getComputedStyle ignores cascade origin so it would pass either way.
+  const regenHidden = () => $('#regenerate-answer').classList.contains('hidden');
+  assert.ok(regenHidden(), 'regenerate hidden when the run cannot be replayed');
 
   state.handlers['llm:token']({ text: 'answer body' });
   state.handlers['llm:done']({});
@@ -181,12 +185,13 @@ async function testAnswerControls() {
 
   // An error leaves nothing worth copying.
   state.handlers['llm:start']({ userBubble: null, small: false, mode: 'assist', text: 'hi', replayable: true });
-  assert.ok(!$('#regenerate-answer').hidden, 'regenerate offered for a replayable run');
+  assert.ok(!regenHidden(), 'regenerate offered for a replayable run');
   state.handlers['llm:error']({ message: 'Error: boom' });
   $('#answer-tool-status').textContent = '';
   $('#copy-answer').click();
   await tick();
-  assert.strictEqual($('#answer-tool-status').textContent, '', 'copy ignores an error bubble');
+  assert.strictEqual($('#answer-tool-status').textContent, 'Nothing to copy',
+    'copy refuses an error bubble, and says so');
   assert.strictEqual(status(), 'Ready', 'toolbar recovers after an error');
 }
 

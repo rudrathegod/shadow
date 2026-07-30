@@ -174,7 +174,7 @@
   }
   $('#send-btn').addEventListener('click', send);
   $('#copy-answer').addEventListener('click', async () => {
-    if (!lastAnswerText) return;
+    if (!lastAnswerText) return showAnswerToolStatus('Nothing to copy');
     try {
       await navigator.clipboard.writeText(lastAnswerText);
       showAnswerToolStatus('Copied');
@@ -329,7 +329,9 @@
     setToolbarStatus('Working', 'working');
     // Main is the only place that knows the mode for shortcut-driven runs.
     lastRequest = replayable ? { mode, text: text || '' } : null;
-    $('#regenerate-answer').hidden = !lastRequest;
+    // The `hidden` attribute is a UA-origin rule and loses to
+    // `.answer-tools button { display: grid }`; .hidden carries !important.
+    $('#regenerate-answer').classList.toggle('hidden', !lastRequest);
   });
   shadow.on('llm:token', ({ text }) => appendToken(text));
   shadow.on('llm:done', () => {
