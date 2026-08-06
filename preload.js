@@ -11,7 +11,6 @@ contextBridge.exposeInMainWorld('shadow', {
   shortcutsGet: () => ipcRenderer.invoke('shortcuts:get'),
   shortcutsSet: (next) => ipcRenderer.invoke('shortcuts:set', next),
   shortcutsCapture: (on) => ipcRenderer.invoke('shortcuts:capture', on),
-  panic: () => ipcRenderer.send('window:panic'),
   quitApp: () => ipcRenderer.send('app:quit'),
   ask: (payload) => ipcRenderer.send('ask', payload),
   cancelAsk: () => ipcRenderer.invoke('ask:cancel'),
@@ -24,7 +23,7 @@ contextBridge.exposeInMainWorld('shadow', {
   openPane: (url) => ipcRenderer.send('open-pane', url),
   log: (msg) => ipcRenderer.send('log', msg),
   on: (channel, cb) => {
-    const allowed = ['capture:state', 'llm:start', 'llm:token', 'llm:done', 'llm:error', 'status', 'stt:state', 'transcript', 'overlay:scroll', 'overlay:focus-input'];
+    const allowed = ['capture:state', 'llm:start', 'llm:token', 'llm:done', 'llm:error', 'status', 'stt:state', 'transcript', 'overlay:scroll', 'overlay:focus-input', 'overlay:panic'];
     if (!allowed.includes(channel)) return;
     ipcRenderer.on(channel, (_e, data) => cb(data));
   }

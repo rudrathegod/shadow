@@ -584,7 +584,6 @@ ipcMain.handle('window:setPosition', (_e, preset) => {
 }); 
 // Button can only hide — once hidden there's nothing to click, so coming back
 // is the global shortcut's job.
-ipcMain.on('window:panic', () => setPanic(true));
 ipcMain.on('app:quit', () => app.quit());
 ipcMain.handle('capture:toggle', () => setCapturing(!state.capturing)); 
 ipcMain.handle('capture:state', () => ({ active: state.capturing })); 
@@ -609,29 +608,16 @@ ipcMain.on('open-pane', (_e, url) => {
 }); 
 ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg)); 
 
-// -------- panic: hide the whole overlay, and bring it back --------
-// win.hide() rather than collapsing the panel — someone standing behind you
-// should see nothing at all, not a smaller version of it. Capture keeps running
-// so a meeting in progress isn't interrupted.
-function setPanic(hidden) {
-  if (!win || win.isDestroyed()) return false;
-  if (hidden) {
-    win.hide();
-  } else {
-    win.showInactive(); // never steal focus from whatever they're actually doing
-    // hide() can drop these on some window managers; re-assert so it comes back
-    // on top and still excluded from screen shares.
-    win.setAlwaysOnTop(true, 'screen-saver', 1);
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  }
-  return hidden;
-}
-function togglePanic() { return setPanic(!!win && win.isVisible()); }
+// -------- panic: collapse the panel down to the toolbar, and bring it back --------
+// The renderer owns the collapsed state (it's a CSS class), so main just pokes it
+// and doesn't try to mirror it. Capture keeps running so a meeting in progress
+// isn't interrupted.
+function togglePanic() { send('overlay:panic'); }
 
 // -------- shortcuts --------
 // Order here is the order shown in Settings.
 const SHORTCUT_ACTIONS = {
-  panic: { label: 'Panic — hide / bring back', run: () => togglePanic() },
+  panic: { label: 'Panic — collapse / bring back', run: () => togglePanic() },
   assist: { label: 'Assist', run: () => runFeature('assist', '') },
   solve: { label: 'Solve what\'s on screen', run: () => captureAndSolve() },
   addShot: { label: 'Add screenshot to batch', run: () => addScreenshotToBatch() },
