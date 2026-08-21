@@ -62,6 +62,22 @@ assert.strictEqual(stripFences('  bare text  '), 'bare text');
   assert.strictEqual({}.polluted, undefined, 'deepMerge drops __proto__');
 }
 
+// --- store: retired shortcut-default migration ------------------------------
+// Same problem as retired models: a saved shortcuts object beats DEFAULTS in
+// the merge, so moving solve/addShot's defaults alone never reaches an
+// existing install — the old key stays live until this rewrites it.
+{
+  const { _deepMerge, _dropRetiredShortcuts, _DEFAULTS, _DEFAULT_SHORTCUTS } = require('./src/store');
+  const stale = { shortcuts: { solve: 'CommandOrControl+H', addShot: 'CommandOrControl+Shift+H' } };
+  const merged = _dropRetiredShortcuts(_deepMerge(_DEFAULTS, stale));
+  assert.strictEqual(merged.shortcuts.solve, _DEFAULT_SHORTCUTS.solve, 'stale solve default is rewritten');
+  assert.strictEqual(merged.shortcuts.addShot, _DEFAULT_SHORTCUTS.addShot, 'stale addShot default is rewritten');
+  // A shortcut the user deliberately rebound must survive untouched, even if
+  // it happens to collide with the id of a retired default.
+  const custom = { shortcuts: { solve: 'CommandOrControl+Alt+9' } };
+  assert.strictEqual(_dropRetiredShortcuts(_deepMerge(_DEFAULTS, custom)).shortcuts.solve, 'CommandOrControl+Alt+9');
+}
+
 // --- STT provider selection ------------------------------------------------
 // Transcription picks its provider independently of solving/chat, because
 // Anthropic has no speech API. 'auto' keeps the historic Whisper-then-Gemini

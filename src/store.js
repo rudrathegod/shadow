@@ -74,6 +74,23 @@ function dropRetiredModels(d) {
   return d;
 }
 
+// Shortcut ids whose default moved. A saved value still matching the OLD
+// default is a stale copy, not a deliberate rebind — rewrite it so the new
+// default reaches existing installs. Anything else is a real rebind and is
+// left alone, same policy as isRetiredModel.
+const RETIRED_SHORTCUT_DEFAULTS = {
+  solve: 'CommandOrControl+H',
+  addShot: 'CommandOrControl+Shift+H'
+};
+function dropRetiredShortcuts(d) {
+  const saved = d.shortcuts;
+  if (!saved) return d;
+  for (const [id, oldDefault] of Object.entries(RETIRED_SHORTCUT_DEFAULTS)) {
+    if (saved[id] === oldDefault) saved[id] = DEFAULT_SHORTCUTS[id];
+  }
+  return d;
+}
+
 let data = null;
 
 function deepMerge(base, over) {
@@ -94,6 +111,7 @@ function load() {
   try { data = deepMerge(DEFAULTS, JSON.parse(fs.readFileSync(file(), 'utf8'))); }
   catch { data = deepMerge(DEFAULTS, {}); }
   dropRetiredModels(data);
+  dropRetiredShortcuts(data);
   return data;
 }
 function save() { try { fs.writeFileSync(file(), JSON.stringify(data, null, 2)); } catch (e) { /* ignore */ } }
@@ -107,6 +125,7 @@ module.exports = {
   // exported for test.js
   _deepMerge: deepMerge,
   _dropRetiredModels: dropRetiredModels,
+  _dropRetiredShortcuts: dropRetiredShortcuts,
   _DEFAULTS: DEFAULTS,
   _DEFAULT_SHORTCUTS: DEFAULT_SHORTCUTS
 };
