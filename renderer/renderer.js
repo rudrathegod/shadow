@@ -13,10 +13,6 @@
   document.querySelector('.act[data-mode="followup"] .ic').innerHTML = icon('message-circle', { size: 16 });
   document.querySelector('.act[data-mode="recap"] .ic').innerHTML = icon('refresh-cw', { size: 16 });
   $('#smart-toggle .ic').innerHTML = icon('zap', { size: 14 });
-  if (shadow.platform !== 'darwin') {
-    const kc = document.querySelectorAll('#placeholder .keycap')[0];
-    if (kc) kc.textContent = 'Ctrl';
-  }
   $('#panic-btn').innerHTML = icon('eye-off', { size: 15 });
   $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
   $('#send-btn').innerHTML = icon('play', { size: 15 });
@@ -178,6 +174,13 @@
     placeholder.classList.toggle('hidden', input.value.length > 0 || document.activeElement === input);
     input.style.height = 'auto';
     input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+  }
+  // solve and addShot both rotate after every use, so their hint here has to
+  // read the live binding (keyLive), same as the guide's kbd().
+  function renderPlaceholderHint() {
+    const kc = (id) => '<span class="keycap">' + prettyAccel(keyLive[id]) + '</span>';
+    placeholder.innerHTML = 'Ask about your screen or conversation, or ' + kc('assist') + ' for Assist, '
+      + kc('solve') + ' to solve using all screenshots, or ' + kc('addShot') + ' to add one first';
   }
   input.addEventListener('input', syncPlaceholder);
   input.addEventListener('focus', () => { composer.classList.add('focused'); placeholder.classList.add('hidden'); });
@@ -517,6 +520,7 @@
     // at boot has to be refreshed or it would overwrite what we just saved.
     settings.shortcuts = res.shortcuts;
     renderKeys();
+    renderPlaceholderHint();
   }
   async function stopRecording(save) {
     recordingId = null;
@@ -726,6 +730,7 @@
   shadow.on('shortcuts:changed', (d) => {
     keyLive = { ...keyLive, ...(d && d.effective) };
     if (!obScrim.classList.contains('hidden')) renderOnboard();
+    renderPlaceholderHint();
   });
 
   // ---- boot --------------------------------------------------------------
@@ -737,6 +742,7 @@
     syncPlaceholder();
     const keys = await shadow.shortcutsGet();
     keyLive = { ...keys.defaults, ...keys.shortcuts, ...keys.effective };
+    renderPlaceholderHint();
     const back = keys.shortcuts.panic || keys.defaults.panic;
     $('#panic-btn').setAttribute('aria-label', back
       ? 'Panic — collapse shadow (' + prettyAccel(back) + ' toggles it)'
