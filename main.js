@@ -311,9 +311,9 @@ async function verifyAndRepair(llm, answerText, images) {
   return { note: `Self-test still failing after one fix attempt: ${retry.error} — double check before using.` };
 }
 
-// -------- Cmd+H batching: ⌘⇧H adds a screenshot without solving, ⌘H solves using all of them --------
+// -------- Cmd+. batching: ⌘. adds a screenshot without solving, ⌘G solves using all of them --------
 let pendingShots = [];
-// ⌘⇧H is a global shortcut and each shot is a multi-MB data URL, so an
+// ⌘. is a global shortcut and each shot is a multi-MB data URL, so an
 // accidental key-repeat would otherwise build a request no provider will accept.
 const MAX_BATCH = 6;
 async function addScreenshotToBatch() {
@@ -325,14 +325,15 @@ async function addScreenshotToBatch() {
   if (!img) return;
   pendingShots.push(img);
   send('status', { message: `Added screenshot ${pendingShots.length} to the batch — press ${prettySolve()} to solve using all of them, or ${prettyAccelMain(effectiveShortcuts().addShot)} to add more.` });
+  rotateShortcutRandom('addShot'); // after the push commits — a failed capture must not move the key
 }
-// The solve shortcut moves one step along the ring after every successful use,
+// solve and addShot each move to a random new key after every successful use,
 // so a combination someone saw you press is already dead. Session-only: never
 // written to settings, so an explicit rebind in Settings still wins.
-let solveAccel = null; // null = use whatever's bound in settings
+let rotatedAccel = {}; // id -> session-only override
 function effectiveShortcuts() {
   const saved = { ...store.defaultShortcuts(), ...(store.getSettings().shortcuts || {}) };
-  if (solveAccel) saved.solve = solveAccel;
+  for (const id of Object.keys(rotatedAccel)) if (rotatedAccel[id]) saved[id] = rotatedAccel[id];
   return saved;
 }
 // Status copy has to name the key that's live right now, not the one that was
@@ -346,21 +347,24 @@ function prettyAccelMain(accel) {
     .join(process.platform === 'darwin' ? '' : '+');
 }
 const prettySolve = () => prettyAccelMain(effectiveShortcuts().solve) || 'the solve shortcut';
-function rotateSolveShortcut() {
-  const current = effectiveShortcuts().solve;
-  if (!current) return; // deliberately unbound — leave it that way
-  // Skip candidates another app (or another row here) already owns, bounded by
-  // the ring so a fully-taken ring can't spin.
-  for (let step = 1; step <= store.SOLVE_RING.length; step++) {
-    const next = store.nextSolveAccel(current, step);
-    if (next === current) continue;
-    solveAccel = next;
-    if (!registerShortcuts().some((f) => f.id === 'solve')) {
+// Picks a random accelerator for `id`, excluding every shortcut currently
+// bound (so it can't collide with itself or another action), bounded so a
+// nearly-exhausted pool can't spin forever.
+function rotateShortcutRandom(id) {
+  const current = effectiveShortcuts();
+  if (!current[id]) return; // deliberately unbound — leave it that way
+  const taken = Object.values(current);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const next = store.randomAccel(taken);
+    if (!next) break;
+    rotatedAccel[id] = next;
+    if (!registerShortcuts().some((f) => f.id === id)) {
       send('shortcuts:changed', { effective: effectiveShortcuts() });
       return;
     }
+    taken.push(next);
   }
-  solveAccel = null;
+  rotatedAccel[id] = null;
   registerShortcuts();
   send('shortcuts:changed', { effective: effectiveShortcuts() });
 }
@@ -378,7 +382,7 @@ async function captureAndSolve() {
     return;
   }
   pendingShots = [];
-  rotateSolveShortcut(); // after the run commits — a failed capture must not move the key
+  rotateShortcutRandom('solve'); // after the run commits — a failed capture must not move the key
   runFeature('leetcode', '', images);
 }
 
@@ -479,7 +483,7 @@ async function runFeature(mode, userText, presetImages) {
       send('llm:error', { message: `The model gave no response twice in a row (empty completion, or no reply after ${IDLE_TIMEOUT_MS / 1000}s each time) — check your network or API key access and try again.` });
     } else {
       // The self-test costs two more calls (harness, then repair). That's the
-      // difference between one request per ⌘H and three — worth skipping when
+      // difference between one request per ⌘G and three — worth skipping when
       // the provider is already refusing us.
       if (mode === 'leetcode' && hitRateLimit) {
         send('status', { message: 'Skipped the self-test — the API is rate-limiting. Double-check the solution.' });
@@ -623,11 +627,11 @@ ipcMain.handle('shortcuts:get', () => ({
   defaults: store.defaultShortcuts()
 }));
 ipcMain.handle('shortcuts:set', (_e, next) => {
-  solveAccel = null; // an explicit rebind beats the rotation
+  rotatedAccel = {}; // an explicit rebind beats the rotation
   const saved = store.setSettings({ shortcuts: next || {} });
   return { shortcuts: saved.shortcuts, failed: registerShortcuts() };
 });
-// Global shortcuts outrank the focused window, so ⌘H would fire "solve" instead
+// Global shortcuts outrank the focused window, so ⌘G would fire "solve" instead
 // of being recorded. Release them while the user is picking new keys.
 ipcMain.handle('shortcuts:capture', (_e, on) => {
   if (on) globalShortcut.unregisterAll(); else registerShortcuts();

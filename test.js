@@ -171,12 +171,12 @@ async function testHomeScreenKeys() {
   while ($('#ob-next').textContent !== 'Done') click($('#ob-next'));
   const body = $('#ob-body').innerHTML;
   assert.ok(/⌘J/.test(body), 'guide shows the live solve key, not the saved one: ' + body);
-  assert.ok(!/⌘H<\/span>/.test(body), 'stale ⌘H is gone');
-  assert.ok(/⌘⇧H/.test(body), 'the batch key is unchanged and still listed');
+  assert.ok(!/⌘G<\/span>/.test(body), 'stale ⌘G is gone');
+  assert.ok(/⌘\./.test(body), 'the batch key is unchanged and still listed');
 
   // A rotation pushed from main updates the open guide in place.
-  state.handlers['shortcuts:changed']({ effective: { solve: 'CommandOrControl+Alt+H' } });
-  assert.ok(/⌘⌥H/.test($('#ob-body').innerHTML), 'guide follows the rotation while open');
+  state.handlers['shortcuts:changed']({ effective: { solve: 'CommandOrControl+Alt+G' } });
+  assert.ok(/⌘⌥G/.test($('#ob-body').innerHTML), 'guide follows the rotation while open');
 }
 
 // --- answer controls -------------------------------------------------------
@@ -387,28 +387,26 @@ async function testTranscriptCopy() {
 
 // The accelerator conversion is the kind of branchy mapping that breaks quietly:
 // a wrong key name just produces a shortcut that never fires.
-// The solve shortcut rotates one ring step per use. What actually matters:
-// it always moves, it comes back around, and no ring value collides with
-// another default binding (a collision would silently fail to register).
+// solve and addShot each rotate to a random key per use. What actually
+// matters: the pool has no duplicates, it never collides with a fixed
+// default binding, and excluding the currently-bound keys is honored.
 function testSolveRotation() {
   const store = require('./src/store');
-  const ring = store.SOLVE_RING;
-  const others = Object.entries(store._DEFAULT_SHORTCUTS).filter(([id]) => id !== 'solve').map(([, a]) => a);
-  ring.forEach((a) => assert.ok(!others.includes(a), 'ring entry collides with another shortcut: ' + a));
-  assert.strictEqual(new Set(ring).size, ring.length, 'ring has no duplicates');
+  const pool = store.ROTATE_POOL;
+  // solve's own default is expected to be in the pool (rotation starts there);
+  // only the non-rotating fixed shortcuts must never collide with a pool entry.
+  const fixed = Object.entries(store._DEFAULT_SHORTCUTS)
+    .filter(([id]) => id !== 'solve' && id !== 'addShot').map(([, a]) => a);
+  pool.forEach((a) => assert.ok(!fixed.includes(a), 'pool entry collides with a fixed shortcut: ' + a));
+  assert.strictEqual(new Set(pool).size, pool.length, 'pool has no duplicates');
 
-  let accel = store._DEFAULT_SHORTCUTS.solve;
-  const seen = [accel];
-  for (let i = 0; i < ring.length - 1; i++) {
-    const next = store.nextSolveAccel(accel);
-    assert.notStrictEqual(next, accel, 'rotation always moves off the used key');
-    assert.ok(!seen.includes(next), 'rotation does not repeat before the ring is exhausted');
-    seen.push(next);
-    accel = next;
+  for (let i = 0; i < 50; i++) {
+    const next = store.randomAccel([store._DEFAULT_SHORTCUTS.solve]);
+    assert.notStrictEqual(next, store._DEFAULT_SHORTCUTS.solve, 'rotation never lands on an excluded key');
+    assert.ok(pool.includes(next), 'rotation always picks from the pool');
   }
-  assert.strictEqual(store.nextSolveAccel(accel), store._DEFAULT_SHORTCUTS.solve, 'ring wraps around');
-  // A user-set binding that isn't in the ring still lands on a valid ring value.
-  assert.ok(ring.includes(store.nextSolveAccel('CommandOrControl+Shift+9')));
+  // Excluding the whole pool empties the candidates.
+  assert.strictEqual(store.randomAccel(pool), undefined, 'fully-excluded pool yields nothing');
 }
 
 async function testKeybinds() {
@@ -434,7 +432,7 @@ async function testKeybinds() {
 
   assert.strictEqual(window.document.querySelectorAll('#keys-list .s-key-row').length, actions.length,
     'one row per action');
-  assert.strictEqual(keyBtn('solve').textContent, '⌘H', 'mac glyphs for the default binding');
+  assert.strictEqual(keyBtn('solve').textContent, '⌘G', 'mac glyphs for the default binding');
 
   click(keyBtn('solve'));
   await tick();

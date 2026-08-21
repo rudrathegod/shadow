@@ -11,28 +11,29 @@ const file = () => path.join(app.getPath('userData'), 'shadow-data.json');
 const DEFAULT_SHORTCUTS = {
   panic: 'CommandOrControl+\\',
   assist: 'CommandOrControl+Return',
-  solve: 'CommandOrControl+H',
-  addShot: 'CommandOrControl+Shift+H',
+  solve: 'CommandOrControl+G',
+  addShot: 'CommandOrControl+.',
   scrollDown: 'CommandOrControl+Down',
   scrollUp: 'CommandOrControl+Up',
   focusInput: 'CommandOrControl+K',
   quit: 'CommandOrControl+Shift+X'
 };
 
-// The solve shortcut moves after every use, so a key someone watched you press
-// doesn't stay the key. In-memory only (see main.js) — nothing here is written
-// to disk, so an explicit rebind in Settings still wins and a restart is back
-// to the default.
-const SOLVE_RING = [
-  'CommandOrControl+H',
-  'CommandOrControl+J',
-  'CommandOrControl+Alt+H',
-  'CommandOrControl+Alt+J'
-];
-// step lets the caller skip a candidate globalShortcut refused to register.
-function nextSolveAccel(current, step = 1) {
-  const i = SOLVE_RING.indexOf(current);
-  return SOLVE_RING[(((i < 0 ? 0 : i) + step) % SOLVE_RING.length + SOLVE_RING.length) % SOLVE_RING.length];
+// The screenshot shortcuts (solve, addShot) move to a random new key after
+// every use, so a combination someone watched you press doesn't stay valid.
+// In-memory only (see main.js) — nothing here is written to disk, so an
+// explicit rebind in Settings still wins and a restart is back to the default.
+// K is left out: it's focusInput's fixed binding, on the same modifier.
+const ROTATE_LETTERS = 'ABCDEFGIJLMNOPQRSTUVWXYZ'.split('');
+const ROTATE_POOL = ROTATE_LETTERS.flatMap((c) => [`CommandOrControl+${c}`, `CommandOrControl+Alt+${c}`]);
+// Picks uniformly from the pool, excluding every accelerator in `exclude`
+// (the shortcuts currently bound, so the new key can't collide with itself
+// or another action). Returns undefined if that empties the pool.
+function randomAccel(exclude = []) {
+  const excl = new Set(exclude.filter(Boolean));
+  const candidates = ROTATE_POOL.filter((a) => !excl.has(a));
+  if (!candidates.length) return undefined;
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 const DEFAULTS = {
@@ -101,8 +102,8 @@ module.exports = {
   getSettings() { return load(); },
   setSettings(patch) { load(); data = deepMerge(data, patch || {}); save(); return data; },
   defaultShortcuts() { return { ...DEFAULT_SHORTCUTS }; },
-  nextSolveAccel,
-  SOLVE_RING,
+  randomAccel,
+  ROTATE_POOL,
   // exported for test.js
   _deepMerge: deepMerge,
   _dropRetiredModels: dropRetiredModels,
