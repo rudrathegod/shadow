@@ -24,8 +24,13 @@ const DEFAULT_SHORTCUTS = {
 // In-memory only (see main.js) — nothing here is written to disk, so an
 // explicit rebind in Settings still wins and a restart is back to the default.
 // K is left out: it's focusInput's fixed binding, on the same modifier.
+// globalShortcut steals the key system-wide, ahead of whatever app has
+// focus — not just inside shadow. Bare CommandOrControl+<letter> is where
+// every OS/app convention lives (Q quit, W close, S save, C/V copy-paste,
+// Z undo, R reload, ...), so the pool only offers the Alt-modified form,
+// which nothing system-level claims.
 const ROTATE_LETTERS = 'ABCDEFGIJLMNOPQRSTUVWXYZ'.split('');
-const ROTATE_POOL = ROTATE_LETTERS.flatMap((c) => [`CommandOrControl+${c}`, `CommandOrControl+Alt+${c}`]);
+const ROTATE_POOL = ROTATE_LETTERS.map((c) => `CommandOrControl+Alt+${c}`);
 // Picks uniformly from the pool, excluding every accelerator in `exclude`
 // (the shortcuts currently bound, so the new key can't collide with itself
 // or another action). Returns undefined if that empties the pool.

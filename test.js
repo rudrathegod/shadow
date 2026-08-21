@@ -409,10 +409,15 @@ async function testTranscriptCopy() {
 function testSolveRotation() {
   const store = require('./src/store');
   const pool = store.ROTATE_POOL;
-  // solve's own default is expected to be in the pool (rotation starts there);
-  // only the non-rotating fixed shortcuts must never collide with a pool entry.
-  const fixed = Object.entries(store._DEFAULT_SHORTCUTS)
-    .filter(([id]) => id !== 'solve' && id !== 'addShot').map(([, a]) => a);
+  // globalShortcut steals the key system-wide, so the pool must never offer a
+  // bare CommandOrControl+<letter> — that's where every OS/app convention
+  // lives (Q quit, W close, S save, C/V copy-paste, Z undo, R reload, ...).
+  // Every entry has to carry Alt.
+  pool.forEach((a) => assert.ok(/^CommandOrControl\+Alt\+[A-Z]$/.test(a), 'pool entry is not Alt-modified: ' + a));
+  ['Q', 'R', 'S', 'C', 'V', 'Z', 'W'].forEach((letter) => {
+    assert.ok(!pool.includes('CommandOrControl+' + letter), 'bare Cmd+' + letter + ' must never be in the pool');
+  });
+  const fixed = Object.values(store._DEFAULT_SHORTCUTS);
   pool.forEach((a) => assert.ok(!fixed.includes(a), 'pool entry collides with a fixed shortcut: ' + a));
   assert.strictEqual(new Set(pool).size, pool.length, 'pool has no duplicates');
 
