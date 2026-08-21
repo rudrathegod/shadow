@@ -10,3 +10,4 @@ shadow-data.json
 # anything inside a directory that is itself excluded.
 .claude/*
 !.claude/agents/
+skills-lock.json
