@@ -1,0 +1,25 @@
+name: Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # test.js can't require main.js or the renderer (they need a live Electron
+      # app), so a parse check is the only thing standing between a bad in-place
+      # edit and a shipped syntax error.
+      - run: for f in main.js preload.js renderer/renderer.js src/*.js; do node --check "$f"; done
+      - run: npm test
