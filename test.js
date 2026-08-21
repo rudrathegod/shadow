@@ -143,7 +143,9 @@ function bootRenderer() {
       apiKeys: {}, models: { anthropic: {} }, shortcuts: { ...defaults }, onboarded: true
     }),
     settingsSet: async (patch) => { state.settingsSaved = patch; return {}; }, captureState: async () => ({ active: false }),
-    shortcutsGet: async () => ({ actions, shortcuts: { ...defaults }, defaults: { ...defaults } }),
+    // `effective` differs from `shortcuts` exactly as it does after one solve:
+    // the rotation is live but never saved.
+    shortcutsGet: async () => ({ actions, shortcuts: { ...defaults }, effective: { ...defaults, solve: 'CommandOrControl+J' }, defaults: { ...defaults } }),
     shortcutsSet: async (n) => { state.saved = { ...n }; return { shortcuts: { ...n }, failed: [] }; },
     shortcutsCapture: async (on) => { state.captured.push(on); return true; },
     windowSetPosition: async () => ({}), checkUpdate: async () => ({}), installUpdate: async () => ({}),
@@ -155,6 +157,26 @@ function bootRenderer() {
   window.eval(fs.readFileSync(path.join(ROOT, 'renderer/icons.js'), 'utf8'));
   window.eval(fs.readFileSync(path.join(ROOT, 'renderer/renderer.js'), 'utf8'));
   return { window, state, tick: () => new Promise((r) => setTimeout(r, 30)) };
+}
+
+// The guide is where the rotating solve key is published, so it has to show the
+// live binding — not the saved one, and not a hardcoded ⌘H.
+async function testHomeScreenKeys() {
+  const { window, state, tick } = bootRenderer();
+  await tick();
+  const $ = (sel) => window.document.querySelector(sel);
+  const click = (el) => el.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+  click($('#logo-btn'));
+  while ($('#ob-next').textContent !== 'Done') click($('#ob-next'));
+  const body = $('#ob-body').innerHTML;
+  assert.ok(/⌘J/.test(body), 'guide shows the live solve key, not the saved one: ' + body);
+  assert.ok(!/⌘H<\/span>/.test(body), 'stale ⌘H is gone');
+  assert.ok(/⌘⇧H/.test(body), 'the batch key is unchanged and still listed');
+
+  // A rotation pushed from main updates the open guide in place.
+  state.handlers['shortcuts:changed']({ effective: { solve: 'CommandOrControl+Alt+H' } });
+  assert.ok(/⌘⌥H/.test($('#ob-body').innerHTML), 'guide follows the rotation while open');
 }
 
 // --- answer controls -------------------------------------------------------
@@ -365,6 +387,30 @@ async function testTranscriptCopy() {
 
 // The accelerator conversion is the kind of branchy mapping that breaks quietly:
 // a wrong key name just produces a shortcut that never fires.
+// The solve shortcut rotates one ring step per use. What actually matters:
+// it always moves, it comes back around, and no ring value collides with
+// another default binding (a collision would silently fail to register).
+function testSolveRotation() {
+  const store = require('./src/store');
+  const ring = store.SOLVE_RING;
+  const others = Object.entries(store._DEFAULT_SHORTCUTS).filter(([id]) => id !== 'solve').map(([, a]) => a);
+  ring.forEach((a) => assert.ok(!others.includes(a), 'ring entry collides with another shortcut: ' + a));
+  assert.strictEqual(new Set(ring).size, ring.length, 'ring has no duplicates');
+
+  let accel = store._DEFAULT_SHORTCUTS.solve;
+  const seen = [accel];
+  for (let i = 0; i < ring.length - 1; i++) {
+    const next = store.nextSolveAccel(accel);
+    assert.notStrictEqual(next, accel, 'rotation always moves off the used key');
+    assert.ok(!seen.includes(next), 'rotation does not repeat before the ring is exhausted');
+    seen.push(next);
+    accel = next;
+  }
+  assert.strictEqual(store.nextSolveAccel(accel), store._DEFAULT_SHORTCUTS.solve, 'ring wraps around');
+  // A user-set binding that isn't in the ring still lands on a valid ring value.
+  assert.ok(ring.includes(store.nextSolveAccel('CommandOrControl+Shift+9')));
+}
+
 async function testKeybinds() {
   const { window, state, tick } = bootRenderer();
   const defaults = state.defaults, actions = state.actions;
@@ -419,6 +465,8 @@ async function testKeybinds() {
 (async () => {
   await testMarkdown();
   await testKeybinds();
+  testSolveRotation();
+  await testHomeScreenKeys();
   await testIcons();
   await testAnswerControls();
   await testSettingsClickThrough();

@@ -471,6 +471,9 @@
   }
 
   let keyActions = [], keyBinds = {}, keyFailed = [], recordingId = null;
+  // What's actually bound right now. Separate from keyBinds because Settings
+  // posts keyBinds back to disk, and the solve rotation must never be saved.
+  let keyLive = {};
 
   function renderKeys() {
     const list = $('#keys-list');
@@ -509,6 +512,7 @@
   async function commitKeys() {
     const res = await shadow.shortcutsSet(keyBinds);
     keyBinds = res.shortcuts; keyFailed = res.failed || [];
+    keyLive = { ...keyLive, ...res.shortcuts }; // a rebind clears the rotation, so saved == live again
     // closeSettings() writes the whole `settings` object back, so the copy read
     // at boot has to be refreshed or it would overwrite what we just saved.
     settings.shortcuts = res.shortcuts;
@@ -542,6 +546,7 @@
     const res = await shadow.shortcutsGet();
     keyActions = res.actions;
     keyBinds = { ...res.defaults, ...res.shortcuts };
+    keyLive = { ...keyBinds, ...res.effective };
     renderKeys();
   }
   $('#keys-reset').addEventListener('click', async () => {
@@ -654,8 +659,7 @@
   // ---- onboarding / first-run tutorial -----------------------------------
   const obScrim = $('#onboard-scrim');
   const isMac = shadow.platform === 'darwin';
-  const mod = isMac ? '⌘' : 'Ctrl';
-  const shiftKey = isMac ? '⇧' : 'Shift';
+  const kbd = (id) => keyLive[id] ? '<span class="kbd">' + prettyAccel(keyLive[id]) + '</span>' : '<span class="kbd">unbound</span>';
   const OB_STEPS = [
     {
       icon: 'sparkles',
@@ -689,7 +693,9 @@
     {
       icon: 'check',
       title: 'You’re all set',
-      body: `How to use shadow:<ul><li><span class="kbd">${mod}</span> <span class="kbd">\\</span> — <strong>Panic</strong>: collapse shadow instantly if someone walks over. Press again to bring it back.</li><li><span class="kbd">${mod}</span> <span class="kbd">↵</span> — <strong>Assist</strong> with whatever's on screen or being said</li><li><span class="kbd">${mod}</span> <span class="kbd">H</span> — solve a coding problem on screen</li><li><span class="kbd">${mod}</span> <span class="kbd">${shiftKey}</span> <span class="kbd">H</span> — add another screenshot before solving (for problems that need scrolling)</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with <span class="kbd">${mod}</span><span class="kbd">${shiftKey}</span><span class="kbd">X</span>.`
+      // A function, not a string: the solve shortcut moves after every use, so
+      // this has to read the live binding each time the guide is rendered.
+      body: () => `How to use shadow:<ul><li>${kbd('panic')} — <strong>Panic</strong>: collapse shadow instantly if someone walks over. Press again to bring it back.</li><li>${kbd('assist')} — <strong>Assist</strong> with whatever's on screen or being said</li><li>${kbd('solve')} — solve a coding problem on screen. <strong>This one changes after every use</strong> — the new combination shows up here.</li><li>${kbd('addShot')} — add another screenshot before solving (for problems that need scrolling)</li><li>${kbd('scrollUp')} / ${kbd('scrollDown')} — scroll the answer</li><li>${kbd('focusInput')} — jump to the input box</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with ${kbd('quit')}.`
     }
   ];
   let obIndex = 0;
@@ -697,7 +703,7 @@
     const step = OB_STEPS[obIndex];
     $('#ob-icon').innerHTML = icon(step.icon, { size: 34 });
     $('#ob-title').textContent = step.title;
-    $('#ob-body').innerHTML = step.body;
+    $('#ob-body').innerHTML = typeof step.body === 'function' ? step.body() : step.body;
     const btns = $('#ob-buttons'); btns.innerHTML = '';
     (step.buttons || []).forEach((b) => { const el = document.createElement('button'); el.textContent = b.label; el.addEventListener('click', b.action); btns.appendChild(el); });
     const dots = $('#ob-dots'); dots.innerHTML = '';
@@ -715,6 +721,12 @@
   $('#ob-back').addEventListener('click', () => { if (obIndex > 0) { obIndex--; renderOnboard(); } });
   $('#ob-skip').addEventListener('click', finishOnboard);
   $('#logo-btn').addEventListener('click', showOnboard);
+  // Solve rotates to a new combination after each use; keep the guide (and the
+  // Settings row, if it's open) showing what's actually bound.
+  shadow.on('shortcuts:changed', (d) => {
+    keyLive = { ...keyLive, ...(d && d.effective) };
+    if (!obScrim.classList.contains('hidden')) renderOnboard();
+  });
 
   // ---- boot --------------------------------------------------------------
   (async function boot() {
@@ -724,6 +736,7 @@
     showExample();
     syncPlaceholder();
     const keys = await shadow.shortcutsGet();
+    keyLive = { ...keys.defaults, ...keys.shortcuts, ...keys.effective };
     const back = keys.shortcuts.panic || keys.defaults.panic;
     $('#panic-btn').setAttribute('aria-label', back
       ? 'Panic — collapse shadow (' + prettyAccel(back) + ' toggles it)'

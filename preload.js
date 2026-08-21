@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('shadow', {
   openPane: (url) => ipcRenderer.send('open-pane', url),
   log: (msg) => ipcRenderer.send('log', msg),
   on: (channel, cb) => {
-    const allowed = ['capture:state', 'llm:start', 'llm:token', 'llm:done', 'llm:error', 'status', 'stt:state', 'transcript', 'overlay:scroll', 'overlay:focus-input', 'overlay:panic'];
+    const allowed = ['capture:state', 'llm:start', 'llm:token', 'llm:done', 'llm:error', 'status', 'stt:state', 'transcript', 'overlay:scroll', 'overlay:focus-input', 'overlay:panic', 'shortcuts:changed'];
     if (!allowed.includes(channel)) return;
     ipcRenderer.on(channel, (_e, data) => cb(data));
   }

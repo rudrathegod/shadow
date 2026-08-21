@@ -19,6 +19,22 @@ const DEFAULT_SHORTCUTS = {
   quit: 'CommandOrControl+Shift+X'
 };
 
+// The solve shortcut moves after every use, so a key someone watched you press
+// doesn't stay the key. In-memory only (see main.js) — nothing here is written
+// to disk, so an explicit rebind in Settings still wins and a restart is back
+// to the default.
+const SOLVE_RING = [
+  'CommandOrControl+H',
+  'CommandOrControl+J',
+  'CommandOrControl+Alt+H',
+  'CommandOrControl+Alt+J'
+];
+// step lets the caller skip a candidate globalShortcut refused to register.
+function nextSolveAccel(current, step = 1) {
+  const i = SOLVE_RING.indexOf(current);
+  return SOLVE_RING[(((i < 0 ? 0 : i) + step) % SOLVE_RING.length + SOLVE_RING.length) % SOLVE_RING.length];
+}
+
 const DEFAULTS = {
   provider: 'anthropic',      // screen solving + chat
   sttProvider: 'auto',        // 'auto' | 'openai' | 'gemini' — Anthropic has no speech API
@@ -85,8 +101,11 @@ module.exports = {
   getSettings() { return load(); },
   setSettings(patch) { load(); data = deepMerge(data, patch || {}); save(); return data; },
   defaultShortcuts() { return { ...DEFAULT_SHORTCUTS }; },
+  nextSolveAccel,
+  SOLVE_RING,
   // exported for test.js
   _deepMerge: deepMerge,
   _dropRetiredModels: dropRetiredModels,
-  _DEFAULTS: DEFAULTS
+  _DEFAULTS: DEFAULTS,
+  _DEFAULT_SHORTCUTS: DEFAULT_SHORTCUTS
 };

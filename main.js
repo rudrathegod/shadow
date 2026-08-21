@@ -108,6 +108,17 @@ function createWindow() {
     win.setHiddenInMissionControl(true); 
   }
 
+  // Windows drops the capture-exclusion affinity when the window is shown again
+  // after a hide, and showing is what every path here ends with (first load,
+  // focus-input, re-create on activate). Re-assert all three overlay properties
+  // in one place rather than trusting the one call in this function to stick.
+  win.on('show', () => {
+    if (!win || win.isDestroyed()) return;
+    win.setContentProtection(!process.env.SHADOW_NO_PROTECT);
+    win.setAlwaysOnTop(true, 'screen-saver', 1);
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  });
+
   win.loadFile(path.join(__dirname, 'renderer', 'index.html')); 
   win.webContents.on('did-finish-load', () => win.showInactive()); 
   win.webContents.on('render-process-gone', (_e, d) => console.log('[shadow] renderer gone', JSON.stringify(d))); 
@@ -307,14 +318,53 @@ let pendingShots = [];
 const MAX_BATCH = 6;
 async function addScreenshotToBatch() {
   if (pendingShots.length >= MAX_BATCH) {
-    send('status', { message: `Batch is full (${MAX_BATCH} screenshots) — press ⌘H to solve using them.` });
+    send('status', { message: `Batch is full (${MAX_BATCH} screenshots) — press ${prettySolve()} to solve using them.` });
     return;
   }
   const img = await captureOneScreenshot();
   if (!img) return;
   pendingShots.push(img);
-  send('status', { message: `Added screenshot ${pendingShots.length} to the batch — press ⌘H to solve using all of them, or ⌘⇧H to add more.` });
+  send('status', { message: `Added screenshot ${pendingShots.length} to the batch — press ${prettySolve()} to solve using all of them, or ${prettyAccelMain(effectiveShortcuts().addShot)} to add more.` });
 }
+// The solve shortcut moves one step along the ring after every successful use,
+// so a combination someone saw you press is already dead. Session-only: never
+// written to settings, so an explicit rebind in Settings still wins.
+let solveAccel = null; // null = use whatever's bound in settings
+function effectiveShortcuts() {
+  const saved = { ...store.defaultShortcuts(), ...(store.getSettings().shortcuts || {}) };
+  if (solveAccel) saved.solve = solveAccel;
+  return saved;
+}
+// Status copy has to name the key that's live right now, not the one that was
+// live when the string was written.
+function prettyAccelMain(accel) {
+  return (accel || '')
+    .split('+')
+    .map((k) => k === 'CommandOrControl' ? (process.platform === 'darwin' ? '⌘' : 'Ctrl')
+      : k === 'Shift' ? (process.platform === 'darwin' ? '⇧' : 'Shift')
+      : k === 'Alt' ? (process.platform === 'darwin' ? '⌥' : 'Alt') : k)
+    .join(process.platform === 'darwin' ? '' : '+');
+}
+const prettySolve = () => prettyAccelMain(effectiveShortcuts().solve) || 'the solve shortcut';
+function rotateSolveShortcut() {
+  const current = effectiveShortcuts().solve;
+  if (!current) return; // deliberately unbound — leave it that way
+  // Skip candidates another app (or another row here) already owns, bounded by
+  // the ring so a fully-taken ring can't spin.
+  for (let step = 1; step <= store.SOLVE_RING.length; step++) {
+    const next = store.nextSolveAccel(current, step);
+    if (next === current) continue;
+    solveAccel = next;
+    if (!registerShortcuts().some((f) => f.id === 'solve')) {
+      send('shortcuts:changed', { effective: effectiveShortcuts() });
+      return;
+    }
+  }
+  solveAccel = null;
+  registerShortcuts();
+  send('shortcuts:changed', { effective: effectiveShortcuts() });
+}
+
 async function captureAndSolve() {
   if (state.busy) return;
   const img = await captureOneScreenshot();
@@ -324,10 +374,11 @@ async function captureAndSolve() {
   // during it, and runFeature would silently drop this one — taking the whole
   // batch with it if we'd already cleared it.
   if (state.busy) {
-    send('status', { message: 'Still answering the previous request — your screenshots are kept, press ⌘H again in a moment.' });
+    send('status', { message: 'Still answering the previous request — your screenshots are kept, press ' + prettySolve() + ' again in a moment.' });
     return;
   }
   pendingShots = [];
+  rotateSolveShortcut(); // after the run commits — a failed capture must not move the key
   runFeature('leetcode', '', images);
 }
 
@@ -564,10 +615,15 @@ ipcMain.handle('settings:set', (_e, patch) => {
 ipcMain.handle('transcript:get', () => transcript.map((t) => (t.channel === 'them' ? 'Them: ' : 'You: ') + t.text).join('\n'));
 ipcMain.handle('shortcuts:get', () => ({
   actions: Object.entries(SHORTCUT_ACTIONS).map(([id, d]) => ({ id, label: d.label })),
+  // `shortcuts` is what Settings edits and posts back — it must stay the saved
+  // map, or the rotation would be written to disk on the next round-trip.
   shortcuts: store.getSettings().shortcuts || {},
+  effective: effectiveShortcuts(), // display only: what's actually bound now
+
   defaults: store.defaultShortcuts()
 }));
 ipcMain.handle('shortcuts:set', (_e, next) => {
+  solveAccel = null; // an explicit rebind beats the rotation
   const saved = store.setSettings({ shortcuts: next || {} });
   return { shortcuts: saved.shortcuts, failed: registerShortcuts() };
 });
@@ -632,7 +688,7 @@ const SHORTCUT_ACTIONS = {
 // looks identical to a broken feature.
 function registerShortcuts() {
   globalShortcut.unregisterAll();
-  const saved = store.getSettings().shortcuts || {};
+  const saved = effectiveShortcuts();
   const failed = [];
   for (const [id, def] of Object.entries(SHORTCUT_ACTIONS)) {
     const accel = saved[id];
