@@ -8,10 +8,6 @@ const { MODES } = require('./src/prompts');
 const { rms16 } = require('./src/wav');
 const { extractCode, stripFences, runSandboxed } = require('./src/verify');
 
-// Disable Chromium GPU acceleration before app readiness to avoid spawning a
-// separate GPU helper process for this lightweight overlay.
-app.disableHardwareAcceleration();
-
 let win = null; 
 
 // -------- capture / transcript state -------- 

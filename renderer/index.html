@@ -8,24 +8,27 @@
 </head>
 <body>
   <div id="app">
-    <!-- Top-center floating pill toolbar (drag handle) -->
-    <div id="toolbar">
-      <button class="tb-logo" id="logo-btn" aria-label="shadow"></button>
-      <div class="tb-divider"></div>
-      <button class="tb-hide" id="hide-btn"><span class="chev"></span><span>Hide</span></button>
-      <div class="tb-divider"></div>
-      <button class="tb-stop" id="stop-btn" aria-label="Start / stop listening"></button>
-      <span id="toolbar-status" data-state="ready"><span class="toolbar-status-dot"></span><span id="toolbar-status-text">Ready</span></span>
-      <div class="tb-divider"></div>
-      <button class="tb-transcript" id="transcript-btn" aria-label="Copy full transcript"></button>
-      <div class="tb-divider"></div>
-      <button class="tb-panic" id="panic-btn" aria-label="Panic — collapse shadow"></button>
-    </div>
-
     <!-- Main assistant panel -->
     <div id="panel-wrap">
       <span id="live-dot" class="off"></span>
       <div id="panel" class="glass no-drag">
+        <header class="panel-header">
+          <div class="panel-identity">
+            <span class="panel-kicker">shadow</span>
+            <h1>Private context, on demand</h1>
+          </div>
+          <div id="toolbar">
+            <button class="tb-logo" id="logo-btn" aria-label="shadow"></button>
+            <div class="tb-divider"></div>
+            <button class="tb-hide" id="hide-btn"><span class="chev"></span><span>Hide</span></button>
+            <div class="tb-divider"></div>
+            <button class="tb-stop" id="stop-btn" aria-label="Start / stop listening"></button>
+            <span id="toolbar-status" data-state="ready"><span class="toolbar-status-dot"></span><span id="toolbar-status-text">Ready</span></span>
+            <div class="tb-divider"></div>
+            <button class="tb-transcript" id="transcript-btn" aria-label="Copy full transcript"></button>
+            <button class="tb-panic" id="panic-btn" aria-label="Panic — collapse shadow"></button>
+          </div>
+        </header>
         <div id="messages"></div>
 
         <div id="action-row">
@@ -41,13 +44,14 @@
 
         <div id="composer">
           <div id="input-area">
-            <div id="placeholder">Ask about your screen or conversation, or <span class="keycap">⌘</span><span class="keycap">⏎</span> for Assist</div>
+            <div id="placeholder">Ask about your screen or conversation...</div>
             <textarea id="input" rows="1" spellcheck="false"></textarea>
           </div>
         <div id="composer-bottom">
             <button id="smart-toggle" class="smart-pill"><span class="ic"></span><span>Smart</span></button>
             <button id="more-btn" class="more-btn" aria-label="Settings"></button>
             <div class="spacer"></div>
+            <div id="shortcut-hints" aria-label="Keyboard shortcuts"></div>
             <button id="send-btn" aria-label="Send"></button>
           </div>
         </div>
@@ -59,7 +63,6 @@
           <button id="clear-answer" aria-label="Clear answer"></button>
           <span id="answer-tool-status" aria-live="polite"></span>
         </div>
-        <div id="watermark">rudra</div>
       </div>
     </div>
   </div>

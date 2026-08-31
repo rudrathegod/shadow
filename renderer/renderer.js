@@ -14,8 +14,8 @@
   document.querySelector('.act[data-mode="recap"] .ic').innerHTML = icon('refresh-cw', { size: 16 });
   $('#smart-toggle .ic').innerHTML = icon('zap', { size: 14 });
   $('#panic-btn').innerHTML = icon('eye-off', { size: 15 });
-  $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
-  $('#send-btn').innerHTML = icon('play', { size: 15 });
+  $('#more-btn').innerHTML = icon('settings', { size: 14 }) + '<span>Settings</span>';
+  $('#send-btn').textContent = '↵';
   $('#copy-answer').innerHTML = icon('copy', { size: 15 });
   $('#copy-code').innerHTML = icon('code', { size: 15 });
   $('#regenerate-answer').innerHTML = icon('refresh-cw', { size: 15 });
@@ -168,6 +168,7 @@
 
   const input = $('#input');
   const placeholder = $('#placeholder');
+  const shortcutHints = $('#shortcut-hints');
   const composer = $('#composer');
 
   function syncPlaceholder() {
@@ -175,12 +176,12 @@
     input.style.height = 'auto';
     input.style.height = Math.min(input.scrollHeight, 140) + 'px';
   }
-  // solve and addShot both rotate after every use, so their hint here has to
-  // read the live binding (keyLive), same as the guide's kbd().
   function renderPlaceholderHint() {
     const kc = (id) => '<span class="keycap">' + prettyAccel(keyLive[id]) + '</span>';
-    placeholder.innerHTML = 'Ask about your screen or conversation, or ' + kc('assist') + ' for Assist, '
-      + kc('solve') + ' to solve using all screenshots, or ' + kc('addShot') + ' to add one first';
+    placeholder.textContent = 'Ask about your screen or conversation...';
+    shortcutHints.innerHTML = '<span class="shortcut-chip">' + kc('assist') + '<span>Assist</span></span>'
+      + '<span class="shortcut-chip">' + kc('solve') + '<span>Solve</span></span>'
+      + '<span class="shortcut-chip">' + kc('addShot') + '<span>Capture</span></span>';
   }
   input.addEventListener('input', syncPlaceholder);
   input.addEventListener('focus', () => { composer.classList.add('focused'); placeholder.classList.add('hidden'); });
@@ -634,13 +635,13 @@
     await shadow.settingsSet(settings);
   }
 
-  // ---- example conversation (matches the reference screenshot) ------------
+  // ---- example conversation ------------------------------------------------
   function showExample() {
     clearMessages();
     addUserBubble('What should I say?');
     const ai = document.createElement('div');
     ai.className = 'ai-text';
-    ai.textContent = '“A discounted cash flow model values a company by projecting future free cash flows and discounting them to present value using the weighted average cost of capital.”';
+    ai.textContent = 'Keep the conversation moving.';
     messages.appendChild(ai);
   }
 
