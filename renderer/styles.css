@@ -165,15 +165,23 @@ button,input,textarea { font:inherit; } button { -webkit-app-region:no-drag; } b
 #settings,#onboard { border-radius:4px; }.s-tabs,.s-seg button,.s-key-btn,.s-pos-grid button,.s-field input { border-color:#45475a; border-radius:3px; background:#181825; }.s-tab { border-radius:3px; }.s-tab.on { background:#313244; }.s-seg button.on,.s-key-btn.recording { background:#cba6f7; color:#1e1e2e; }.s-pos-grid button.on { background:#313244; box-shadow:inset 0 0 0 1px #89b4fa; }.s-close,.ob-primary { border-radius:3px; background:#cba6f7; color:#1e1e2e; box-shadow:none; }.s-close:hover,.ob-primary:hover { background:#d0b5f9; }
 
 /* Black + light-blue palette */
-:root { --accent:#7dd3fc; --accent-bright:#bae6fd; --canvas:#121212; --surface:#18181b; --surface-raised:#27272a; --text:#f4f4f5; --text-soft:#d4d4d8; --text-muted:#a1a1aa; }
-.glass { border-color:#27272a; background:#121212; }.panel-kicker,.user-bubble { color:#7dd3fc; }.panel-header h1,.ai-text { color:#f4f4f5; } #toolbar button,.tb-logo { color:#d4d4d8!important; } #toolbar button:hover { color:#f4f4f5!important; background:#18181b!important; }.tb-divider { background:#27272a; } #toolbar-status { color:#a1a1aa; }.toolbar-status-dot { background:#7dd3fc; }
-.act { color:#a1a1aa; }.act:hover { color:#d4d4d8; }.act-primary,.act-primary:hover { background:#7dd3fc; color:#0c0c0d; }.ai-text { border-left-color:#7dd3fc; }.ai-text pre { border-color:#27272a; background:#0c0c0d; }.ai-text p code,.keycap { background:#27272a; color:#d4d4d8; }
-#composer { border-color:#27272a; background:#0c0c0d; }.smart-pill,.more-btn { color:#a1a1aa; }.smart-pill:hover,.more-btn:hover { color:#d4d4d8; background:#27272a; }.smart-pill.on { background:#7dd3fc; color:#0c0c0d; } #shortcut-hints { background:#18181b; color:#a1a1aa; }.shortcut-chip { color:#a1a1aa; }.shortcut-chip .keycap { background:#27272a; color:#d4d4d8; } #send-btn { background:#27272a; color:#d4d4d8; } #send-btn:hover { background:#3f3f46; }
-.s-tabs,.s-seg button,.s-key-btn,.s-pos-grid button,.s-field input { border-color:#27272a; background:#0c0c0d; }.s-tab.on,.s-pos-grid button.on { background:#27272a; }.s-seg button.on,.s-key-btn.recording,.s-close,.ob-primary { background:#7dd3fc; color:#0c0c0d; }.s-pos-grid button.on { box-shadow:inset 0 0 0 1px #7dd3fc; }.s-close:hover,.ob-primary:hover { background:#bae6fd; }
+:root { --accent:#a7f3d0; --accent-bright:#d1fae5; --canvas:#121212; --surface:#18181b; --surface-raised:#27272a; --text:#f4f4f5; --text-soft:#d4d4d8; --text-muted:#a1a1aa; }
+.glass { border-color:#27272a; background:#121212; }.panel-kicker,.user-bubble { color:#a7f3d0; }.panel-header h1,.ai-text { color:#f4f4f5; } #toolbar button,.tb-logo { color:#d4d4d8!important; } #toolbar button:hover { color:#f4f4f5!important; background:#18181b!important; }.tb-divider { background:#27272a; } #toolbar-status { color:#a1a1aa; }.toolbar-status-dot { background:#a7f3d0; }
+.act { color:#a1a1aa; }.act:hover { color:#d4d4d8; }.act-primary,.act-primary:hover { background:#a7f3d0; color:#0c0c0d; }.ai-text { border-left-color:#a7f3d0; }.ai-text pre { border-color:#27272a; background:#0c0c0d; }.ai-text p code,.keycap { background:#27272a; color:#d4d4d8; }
+#composer { border-color:#27272a; background:#0c0c0d; }.smart-pill,.more-btn { color:#a1a1aa; }.smart-pill:hover,.more-btn:hover { color:#d4d4d8; background:#27272a; }.smart-pill.on { background:#a7f3d0; color:#0c0c0d; } #shortcut-hints { background:#18181b; color:#a1a1aa; }.shortcut-chip { color:#a1a1aa; }.shortcut-chip .keycap { background:#27272a; color:#d4d4d8; } #send-btn { background:#27272a; color:#d4d4d8; } #send-btn:hover { background:#3f3f46; }
+.s-tabs,.s-seg button,.s-key-btn,.s-pos-grid button,.s-field input { border-color:#27272a; background:#0c0c0d; }.s-tab.on,.s-pos-grid button.on { background:#27272a; }.s-seg button.on,.s-key-btn.recording,.s-close,.ob-primary { background:#a7f3d0; color:#0c0c0d; }.s-pos-grid button.on { box-shadow:inset 0 0 0 1px #a7f3d0; }.s-close:hover,.ob-primary:hover { background:#d1fae5; }
 
 /* The answer owns the visual hierarchy; chrome only supplies context. */
 .panel-header { min-height:38px; margin-bottom:12px; }
-.panel-kicker { margin-bottom:2px; color:#7dd3fc; font-size:9px; font-weight:700; letter-spacing:.12em; }
+.panel-kicker { margin-bottom:2px; color:#a7f3d0; font-size:9px; font-weight:700; letter-spacing:.12em; }
+
+/* Neon green is reserved for active context and live state. */
+:root { --accent:#39ff14; --accent-bright:#b6ff9e; }
+.panel-kicker,.user-bubble { color:#39ff14; }
+.toolbar-status-dot { background:#39ff14; }
+.act-primary,.act-primary:hover,.smart-pill.on,.s-seg button.on,.s-key-btn.recording,.s-close,.ob-primary { background:#39ff14; color:#081004; }
+.ai-text { border-left-color:#39ff14; }
+.s-pos-grid button.on { box-shadow:inset 0 0 0 1px #39ff14; }
 .panel-header h1 { color:#a1a1aa; font-size:12px; font-weight:500; letter-spacing:-.015em; }
 #messages:empty::before { content:'Choose a mode or ask a question.'; color:#a1a1aa; }
 .ai-text { font-size:16px; line-height:1.68; }
