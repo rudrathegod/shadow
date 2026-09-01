@@ -563,10 +563,18 @@
   // ---- quit ------------------------------------------------------------
   $('#quit-btn').addEventListener('click', () => shadow.quitApp());
   let updateZip = null;
+  function fmtMB(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + ' MB'; }
+  shadow.on('update:progress', ({ received, total }) => {
+    const btn = $('#update-btn');
+    if (!btn.disabled) return; // only while an install download is in flight
+    btn.textContent = total
+      ? `Downloading… ${Math.round((received / total) * 100)}% (${fmtMB(received)} / ${fmtMB(total)})`
+      : `Downloading… ${fmtMB(received)}`;
+  });
   $('#update-btn').addEventListener('click', async () => {
     const btn = $('#update-btn');
     if (updateZip) {
-      btn.textContent = 'Installing… shadow will restart';
+      btn.textContent = 'Downloading… 0%';
       btn.disabled = true;
       // Only macOS swaps the bundle in place; elsewhere this just opens the
       // download, so don't leave the button stuck on "Installing…".

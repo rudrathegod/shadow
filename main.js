@@ -539,7 +539,18 @@ ipcMain.handle('app:installUpdate', async (_e, zipUrl) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shadow-update-'));
   const zipPath = path.join(tmp, isWin ? 'shadow-win.zip' : 'shadow-mac.zip');
   const res = await fetch(zipUrl);
-  fs.writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
+  const total = Number(res.headers.get('content-length')) || 0;
+  let received = 0;
+  const chunks = [];
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    send('update:progress', { received, total });
+  }
+  fs.writeFileSync(zipPath, Buffer.concat(chunks.map((c) => Buffer.from(c))));
 
   // Both platforms do the same dance: unpack to temp, then hand a script to a
   // detached process that waits for this one to exit before swapping. Neither
