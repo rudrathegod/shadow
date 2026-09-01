@@ -178,7 +178,9 @@
   }
   function renderPlaceholderHint() {
     const kc = (id) => '<span class="keycap">' + prettyAccel(keyLive[id]) + '</span>';
-    placeholder.textContent = 'Ask about your screen or conversation...';
+    // shortcut-hints lives inside #placeholder now, so textContent would wipe it —
+    // only the copy span gets reset.
+    placeholder.querySelector('.placeholder-copy').textContent = 'Ask about your screen or conversation...';
     shortcutHints.innerHTML = '<span class="shortcut-chip">' + kc('assist') + '<span>Assist</span></span>'
       + '<span class="shortcut-chip">' + kc('solve') + '<span>Solve</span></span>'
       + '<span class="shortcut-chip">' + kc('addShot') + '<span>Capture</span></span>';
