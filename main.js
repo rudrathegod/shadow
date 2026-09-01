@@ -311,7 +311,7 @@ async function verifyAndRepair(llm, answerText, images) {
 let pendingShots = [];
 // ⌘. is a global shortcut and each shot is a multi-MB data URL, so an
 // accidental key-repeat would otherwise build a request no provider will accept.
-const MAX_BATCH = 6;
+const MAX_BATCH = 15;
 async function addScreenshotToBatch() {
   if (pendingShots.length >= MAX_BATCH) {
     send('status', { message: `Batch is full (${MAX_BATCH} screenshots) — press ${prettySolve()} to solve using them.` });
