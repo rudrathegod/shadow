@@ -51,3 +51,14 @@ Every push to main bumps the version and pushes a matching `vX.X.X` tag — `.gi
 - Be concise. Avoid long-winded explanations
 - I am sometimes wrong. Challenge my assumptions
 - Don't be lazy. Do things the right way, not the easy way
+
+<!-- antislop:start -->
+## antislop
+Installed as the `antislop` plugin (marketplace: anti-slop). For UI, copy, people, mobile layout, or code-comment work, invoke the core skill (`antislop:antislop`) plus the skill for the task:
+- UI / visual: `antislop:antislop-ui`
+- Copy & text: `antislop:antislop-copywriting`
+- People (contrast, keyboard, focus, states): `antislop:antislop-human`
+- Mobile / responsive: `antislop:antislop-layoutmobile`
+- Code comments: `antislop:antislop-code`
+Mode: DURING — apply the rules while writing/editing UI, don't wait to audit after the fact. No `DESIGN.md` exists yet in this repo, so until one is written, label new UI work "draft without direction" with dials ENERGY 1 / RHYTHM 1 / MOTION 1 (R-37) rather than silently defaulting to sterile.
+<!-- antislop:end -->

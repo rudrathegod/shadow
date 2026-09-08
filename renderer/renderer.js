@@ -8,11 +8,8 @@
   $('#logo-btn').innerHTML = icon('logo', { size: 18 });
   $('.tb-hide .chev').innerHTML = icon('chevron-down', { size: 14 });
   $('#stop-btn').innerHTML = icon('stop-square', { size: 15 });
-  document.querySelector('.act[data-mode="assist"] .ic').innerHTML = icon('sparkles', { size: 16 });
-  document.querySelector('.act[data-mode="say"] .ic').innerHTML = icon('wand-sparkles', { size: 16 });
-  document.querySelector('.act[data-mode="followup"] .ic').innerHTML = icon('message-circle', { size: 16 });
-  document.querySelector('.act[data-mode="recap"] .ic').innerHTML = icon('refresh-cw', { size: 16 });
-  $('#smart-toggle .ic').innerHTML = icon('zap', { size: 14 });
+  // .act .ic and #smart-toggle .ic are display:none in the current design (text-only
+  // action pills), so no icon is injected into them.
   $('#panic-btn').innerHTML = icon('eye-off', { size: 15 });
   $('#more-btn').innerHTML = icon('settings', { size: 14 }) + '<span>Settings</span>';
   $('#send-btn').textContent = '↵';
@@ -405,16 +402,21 @@
 
   // ---- settings ----------------------------------------------------------
   const scrim = $('#settings-scrim');
+  const appPanel = $('#app');
+  // Keeps keyboard focus and hit-testing inside whichever scrim is open, since
+  // #settings-scrim and #onboard-scrim are siblings of #app, not children of it.
+  function setAppInert(v) { appPanel.inert = v; }
   // ⌘, opens Settings from anywhere, including while the mouse sits off the
   // panel in click-through mode — without forcing setIgnore(false) here, clicks
   // on the freshly-opened modal fell through to whatever's behind shadow until
   // the mouse happened to move.
-  function openSettings() { fillSettings(); loadKeys(); scrim.classList.remove('hidden'); setIgnore(false); }
+  function openSettings() { fillSettings(); loadKeys(); scrim.classList.remove('hidden'); setAppInert(true); setIgnore(false); }
   function closeSettings() {
     // Closing mid-recording would otherwise leave every global shortcut released.
     if (recordingId) stopRecording(false);
     saveSettings();
     scrim.classList.add('hidden');
+    setAppInert(false);
   }
   $('#more-btn').addEventListener('click', openSettings);
   $('#s-close').addEventListener('click', closeSettings);
@@ -586,11 +588,11 @@
       try {
         const res = await shadow.installUpdate(updateZip);
         if (!res || !res.ok) {
-          btn.textContent = 'Download opened in your browser — unzip and replace shadow';
+          btn.textContent = 'Download opened in your browser, unzip and replace shadow';
           btn.disabled = false;
         }
       } catch {
-        btn.textContent = 'Install failed — click to try again';
+        btn.textContent = 'Install failed, click to try again';
         btn.disabled = false;
       }
       return;
@@ -600,12 +602,12 @@
       const { current, latest, zipUrl } = await shadow.checkUpdate();
       if (latest && latest !== current && zipUrl) {
         updateZip = zipUrl;
-        btn.textContent = 'Update available: v' + latest + ' — click to install';
+        btn.textContent = 'Update available: v' + latest + ', click to install';
       } else {
         btn.textContent = 'Up to date (v' + current + ')';
       }
     } catch {
-      btn.textContent = 'Check failed — try again';
+      btn.textContent = 'Check failed, try again';
     }
   });
   function statusText() {
@@ -658,6 +660,7 @@
   // ---- global keys -------------------------------------------------------
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !scrim.classList.contains('hidden')) closeSettings();
+    if (e.key === 'Escape' && !obScrim.classList.contains('hidden')) finishOnboard();
     if (e.metaKey && e.key === ',') { e.preventDefault(); openSettings(); }
   });
 
@@ -677,14 +680,14 @@
   const kbd = (id) => keyLive[id] ? '<span class="kbd">' + prettyAccel(keyLive[id]) + '</span>' : '<span class="kbd">unbound</span>';
   const OB_STEPS = [
     {
-      icon: 'sparkles',
+      icon: 'message-circle',
       title: 'Welcome to shadow',
-      body: 'shadow is a private AI copilot that floats over your screen. It can <strong>see your screen</strong>, <strong>hear your meetings</strong>, and help you answer questions or solve coding problems — while staying hidden from most screen shares.<br><br>This quick guide gets you running in about a minute.'
+      body: 'shadow is a private AI copilot that floats over your screen. It can <strong>see your screen</strong>, <strong>hear your meetings</strong>, and help you answer questions or solve coding problems, while staying hidden from most screen shares.<br><br>This quick guide gets you running in about a minute.'
     },
     ...(isMac ? [{
       icon: 'shield',
       title: 'Allow shadow to see & hear',
-      body: 'shadow needs two macOS permissions. Click each button, turn <strong>shadow</strong> ON in the window that opens, then come back here.<ul><li><strong>Microphone</strong> — to hear you</li><li><strong>Screen Recording</strong> — to see your screen and hear meeting audio</li></ul>',
+      body: 'shadow needs two macOS permissions. Click each button, turn <strong>shadow</strong> ON in the window that opens, then come back here.<ul><li><strong>Microphone</strong>: to hear you</li><li><strong>Screen Recording</strong>: to see your screen and hear meeting audio</li></ul>',
       buttons: [
         { label: 'Open Microphone settings', action: () => shadow.openPane('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone') },
         { label: 'Open Screen Recording settings', action: () => shadow.openPane('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture') }
@@ -692,25 +695,25 @@
     }] : [{
       icon: 'shield',
       title: 'Allow shadow to see & hear',
-      body: 'When you first use a feature, Windows will prompt for <strong>Microphone</strong> and <strong>screen share</strong> access — click <strong>Allow</strong>. No manual settings needed.'
+      body: 'When you first use a feature, Windows will prompt for <strong>Microphone</strong> and <strong>screen share</strong> access, click <strong>Allow</strong>. No manual settings needed.'
     }]),
     {
       icon: 'key',
       title: 'Connect an AI provider',
-      body: 'shadow uses <strong>your own</strong> API key — pick <span class="hl">OpenAI</span>, <span class="hl">Anthropic</span>, or <span class="hl">Google Gemini</span>. Get a key from your provider, then paste it into shadow\'s Settings.<br><br><strong>Tip:</strong> the listening features need speech-to-text access (an OpenAI key with Whisper, or a Gemini key). A chat-only key still powers screen &amp; coding help.',
+      body: 'shadow uses <strong>your own</strong> API key: pick <span class="hl">OpenAI</span>, <span class="hl">Anthropic</span>, or <span class="hl">Google Gemini</span>. Get a key from your provider, then paste it into shadow\'s Settings.<br><br><strong>Tip:</strong> the listening features need speech-to-text access (an OpenAI key with Whisper, or a Gemini key). A chat-only key still powers screen &amp; coding help.',
       buttons: [{ label: 'Open shadow Settings', action: () => { finishOnboard(); openSettings(); } }]
     },
     {
       icon: 'eye-off',
       title: 'Stay hidden in Zoom',
-      body: 'shadow is hidden from most screen shares automatically (Google Meet, Teams, QuickTime — nothing to do). <strong>Zoom needs one setting:</strong><br><br>Zoom → <span class="hl">Settings</span> → <span class="hl">Share Screen</span> → <span class="hl">Advanced</span> → <strong>Screen capture mode</strong> → choose <strong>“Advanced capture with window filtering.”</strong><br><br>Avoid “<strong>without</strong> window filtering” — that mode reveals shadow.'
+      body: 'shadow is hidden from most screen shares automatically (Google Meet, Teams, QuickTime: nothing to do). <strong>Zoom needs one setting:</strong><br><br>Zoom → <span class="hl">Settings</span> → <span class="hl">Share Screen</span> → <span class="hl">Advanced</span> → <strong>Screen capture mode</strong> → choose <strong>“Advanced capture with window filtering.”</strong><br><br>Avoid “<strong>without</strong> window filtering,” that mode reveals shadow.'
     },
     {
       icon: 'check',
       title: 'You’re all set',
       // A function, not a string: the solve shortcut moves after every use, so
       // this has to read the live binding each time the guide is rendered.
-      body: () => `How to use shadow:<ul><li>${kbd('panic')} — <strong>Panic</strong>: collapse shadow instantly if someone walks over. Press again to bring it back.</li><li>${kbd('assist')} — <strong>Assist</strong> with whatever's on screen or being said</li><li>${kbd('solve')} — solve a coding problem on screen. <strong>This one changes after every use</strong> — the new combination shows up here.</li><li>${kbd('addShot')} — add another screenshot before solving (for problems that need scrolling). <strong>This one changes after every use</strong> too</li><li>${kbd('scrollUp')} / ${kbd('scrollDown')} — scroll the answer</li><li>${kbd('focusInput')} — jump to the input box</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with ${kbd('quit')}.`
+      body: () => `How to use shadow:<ul><li>${kbd('panic')}: <strong>Panic</strong>, collapse shadow instantly if someone walks over. Press again to bring it back.</li><li>${kbd('assist')}: <strong>Assist</strong> with whatever's on screen or being said</li><li>${kbd('solve')}: solve a coding problem on screen. <strong>This one changes after every use</strong>, the new combination shows up here.</li><li>${kbd('addShot')}: add another screenshot before solving (for problems that need scrolling). <strong>This one changes after every use</strong> too</li><li>${kbd('scrollUp')} / ${kbd('scrollDown')}: scroll the answer</li><li>${kbd('focusInput')}: jump to the input box</li><li>Click <strong>▢</strong> in the top bar to start listening to a meeting</li><li>Type a question and press <span class="kbd">↵</span></li></ul>Reopen this guide anytime by clicking the <strong>shadow logo</strong>. Quit with ${kbd('quit')}.`
     }
   ];
   let obIndex = 0;
@@ -727,9 +730,10 @@
     $('#ob-next').textContent = obIndex === OB_STEPS.length - 1 ? 'Done' : 'Next';
     $('#ob-skip').style.visibility = obIndex === OB_STEPS.length - 1 ? 'hidden' : 'visible';
   }
-  function showOnboard() { obIndex = 0; renderOnboard(); obScrim.classList.remove('hidden'); setIgnore(false); }
+  function showOnboard() { obIndex = 0; renderOnboard(); obScrim.classList.remove('hidden'); setAppInert(true); setIgnore(false); }
   async function finishOnboard() {
     obScrim.classList.add('hidden');
+    setAppInert(false);
     if (settings && !settings.onboarded) { settings.onboarded = true; await shadow.settingsSet({ onboarded: true }); }
   }
   $('#ob-next').addEventListener('click', () => { if (obIndex === OB_STEPS.length - 1) finishOnboard(); else { obIndex++; renderOnboard(); } });
@@ -756,8 +760,8 @@
     renderPlaceholderHint();
     const back = keys.shortcuts.panic || keys.defaults.panic;
     $('#panic-btn').setAttribute('aria-label', back
-      ? 'Panic — collapse shadow (' + prettyAccel(back) + ' toggles it)'
-      : 'Panic — collapse shadow');
+      ? 'Panic: collapse shadow (' + prettyAccel(back) + ' toggles it)'
+      : 'Panic: collapse shadow');
     const st = await shadow.captureState();
     $('#live-dot').classList.toggle('off', !st.active);
     $('#stop-btn').classList.toggle('active', st.active);

@@ -190,7 +190,7 @@ function handleSttError(err) {
   // rather than counting it as a failure — nothing is wrong, there's just no room.
   if (isRateLimited(err)) {
     sttCooldownUntil = Date.now() + STT_COOLDOWN_MS;
-    send('status', { message: 'Transcription paused ' + (STT_COOLDOWN_MS / 1000) + 's — ' + err.provider + ' is rate-limiting. It resumes on its own.' });
+    send('status', { message: 'Transcription paused ' + (STT_COOLDOWN_MS / 1000) + 's, ' + err.provider + ' is rate-limiting. It resumes on its own.' });
     return;
   }
 
@@ -200,10 +200,10 @@ function handleSttError(err) {
   sttFailures++;
   if (sttFailures >= STT_MAX_FAILURES) {
     sttDisabled = true;
-    send('status', { message: 'Transcription off after ' + STT_MAX_FAILURES + ' errors in a row (' + err.provider + '): ' + err.message + ' — change any setting to re-enable.' });
+    send('status', { message: 'Transcription off after ' + STT_MAX_FAILURES + ' errors in a row (' + err.provider + '): ' + err.message + '. Change any setting to re-enable.' });
     send('stt:state', { off: true });
   } else {
-    send('status', { message: 'Transcription error (' + err.provider + '): ' + err.message + ' — retrying.' });
+    send('status', { message: 'Transcription error (' + err.provider + '): ' + err.message + ', retrying.' });
   }
 }
 
@@ -244,7 +244,7 @@ async function captureOneScreenshot() {
   const access = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted';
   if (access === 'denied') {
     shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-    send('status', { message: 'Screen capture needs permission — opening System Settings. Grant Screen Recording to shadow, then fully quit and reopen the app.' });
+    send('status', { message: 'Screen capture needs permission, opening System Settings. Grant Screen Recording to shadow, then fully quit and reopen the app.' });
     return null;
   }
   // 'granted' or 'not-determined' — attempt the capture either way. When
@@ -304,7 +304,7 @@ async function verifyAndRepair(llm, answerText, images) {
     const newText = answerText.replace(extracted.code, () => fixed.code);
     return { text: newText, note: 'Found and fixed a bug during self-test.' };
   }
-  return { note: `Self-test still failing after one fix attempt: ${retry.error} — double check before using.` };
+  return { note: `Self-test still failing after one fix attempt: ${retry.error}. Double check before using.` };
 }
 
 // -------- Cmd+. batching: ⌘. adds a screenshot without solving, ⌘G solves using all of them --------
@@ -314,13 +314,13 @@ let pendingShots = [];
 const MAX_BATCH = 15;
 async function addScreenshotToBatch() {
   if (pendingShots.length >= MAX_BATCH) {
-    send('status', { message: `Batch is full (${MAX_BATCH} screenshots) — press ${prettySolve()} to solve using them.` });
+    send('status', { message: `Batch is full (${MAX_BATCH} screenshots), press ${prettySolve()} to solve using them.` });
     return;
   }
   const img = await captureOneScreenshot();
   if (!img) return;
   pendingShots.push(img);
-  send('status', { message: `Added screenshot ${pendingShots.length} to the batch — press ${prettySolve()} to solve using all of them, or ${prettyAccelMain(effectiveShortcuts().addShot)} to add more.` });
+  send('status', { message: `Added screenshot ${pendingShots.length} to the batch, press ${prettySolve()} to solve using all of them, or ${prettyAccelMain(effectiveShortcuts().addShot)} to add more.` });
   rotateShortcutRandom('addShot'); // after the push commits — a failed capture must not move the key
 }
 // solve and addShot each move to a random new key after every successful use,
@@ -374,7 +374,7 @@ async function captureAndSolve() {
   // during it, and runFeature would silently drop this one — taking the whole
   // batch with it if we'd already cleared it.
   if (state.busy) {
-    send('status', { message: 'Still answering the previous request — your screenshots are kept, press ' + prettySolve() + ' again in a moment.' });
+    send('status', { message: 'Still answering the previous request, your screenshots are kept, press ' + prettySolve() + ' again in a moment.' });
     return;
   }
   pendingShots = [];
@@ -444,7 +444,7 @@ async function runFeature(mode, userText, presetImages) {
         onRateLimit: (attempt, waitMs) => {
           if (request.cancelled) return;
           hitRateLimit = true;
-          send('status', { message: `Rate limited by the API — retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` });
+          send('status', { message: `Rate limited by the API, retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt})…` });
         }
       }).then((full) => ({ timedOut: false, full }));
       // Once the race is settled nothing is awaiting `streamed`, so a late
@@ -476,13 +476,13 @@ async function runFeature(mode, userText, presetImages) {
       if (request.cancelled) return;
     }
     if (!full || !full.trim()) {
-      send('llm:error', { message: `The model gave no response twice in a row (empty completion, or no reply after ${IDLE_TIMEOUT_MS / 1000}s each time) — check your network or API key access and try again.` });
+      send('llm:error', { message: `The model gave no response twice in a row (empty completion, or no reply after ${IDLE_TIMEOUT_MS / 1000}s each time). Check your network or API key access and try again.` });
     } else {
       // The self-test costs two more calls (harness, then repair). That's the
       // difference between one request per ⌘G and three — worth skipping when
       // the provider is already refusing us.
       if (mode === 'leetcode' && hitRateLimit) {
-        send('status', { message: 'Skipped the self-test — the API is rate-limiting. Double-check the solution.' });
+        send('status', { message: 'Skipped the self-test, the API is rate-limiting. Double-check the solution.' });
       } else if (mode === 'leetcode') {
         send('status', { message: 'Verifying the solution runs correctly…' });
         const verified = await verifyAndRepair(llm, full, images);
@@ -494,7 +494,7 @@ async function runFeature(mode, userText, presetImages) {
         }
         if (verified.note) send('status', { message: verified.note });
       }
-      if (stalled) send('status', { message: 'Connection stalled after the answer came through — showing what was received.' });
+      if (stalled) send('status', { message: 'Connection stalled after the answer came through, showing what was received.' });
       send('llm:done', {});
     }
   } catch (e) { 
@@ -684,7 +684,7 @@ function togglePanic() { send('overlay:panic'); }
 // -------- shortcuts --------
 // Order here is the order shown in Settings.
 const SHORTCUT_ACTIONS = {
-  panic: { label: 'Panic — collapse / bring back', run: () => togglePanic() },
+  panic: { label: 'Panic: collapse / bring back', run: () => togglePanic() },
   assist: { label: 'Assist', run: () => runFeature('assist', '') },
   solve: { label: 'Solve what\'s on screen', run: () => captureAndSolve() },
   addShot: { label: 'Add screenshot to batch', run: () => addScreenshotToBatch() },

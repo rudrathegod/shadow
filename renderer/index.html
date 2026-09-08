@@ -26,7 +26,7 @@
             <span id="toolbar-status" data-state="ready"><span class="toolbar-status-dot"></span><span id="toolbar-status-text">Ready</span></span>
             <div class="tb-divider"></div>
             <button class="tb-transcript" id="transcript-btn" aria-label="Copy full transcript"></button>
-            <button class="tb-panic" id="panic-btn" aria-label="Panic — collapse shadow"></button>
+            <button class="tb-panic" id="panic-btn" aria-label="Panic: collapse shadow"></button>
           </div>
         </header>
         <div id="messages"></div>
@@ -68,9 +68,9 @@
 
   <!-- Settings -->
   <div id="settings-scrim" class="hidden">
-    <div id="settings" class="glass">
+    <div id="settings" class="glass" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="s-head">
-        <div class="s-title">Settings</div>
+        <div class="s-title" id="settings-title">Settings</div>
         <button id="s-close" class="s-close">Done</button>
       </div>
 
@@ -152,7 +152,7 @@
 
   <!-- First-run tutorial / walkthrough -->
   <div id="onboard-scrim" class="hidden">
-    <div id="onboard" class="glass">
+    <div id="onboard" class="glass" role="dialog" aria-modal="true" aria-labelledby="ob-title">
       <div class="ob-dots" id="ob-dots"></div>
       <div class="ob-icon" id="ob-icon"></div>
       <div class="ob-title" id="ob-title"></div>
